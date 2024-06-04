@@ -64,7 +64,7 @@ class TestAllGames(unittest.TestCase):
         n1p = lambda x: np.argmax(mcts.getActionProb(x, temp=0))
 
         arena = Arena.Arena(n1p, rp, game)
-        print(arena.playGames(2, verbose=False))
+        print(arena.playGames(2, verbose=False))  #False
    
     def test_othello_pytorch(self):
         self.execute_game_test(OthelloGame(6), OthelloPytorchNNet)

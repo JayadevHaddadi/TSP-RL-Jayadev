@@ -12,7 +12,7 @@ from NeuralNet import NeuralNet
 import torch
 import torch.optim as optim
 
-from .OthelloNNet import OthelloNNet as onnet
+from .MancalaNNet import MancalaNNet as mnet
 
 args = dotdict({
     'lr': 0.001,
@@ -26,7 +26,7 @@ args = dotdict({
 
 class NNetWrapper(NeuralNet):
     def __init__(self, game):
-        self.nnet = onnet(game, args)
+        self.nnet = mnet(game, args)
         self.board_x, self.board_y = game.getBoardSize()
         self.action_size = game.getActionSize()
 
@@ -85,7 +85,7 @@ class NNetWrapper(NeuralNet):
         # preparing input
         board = torch.FloatTensor(board.astype(np.float64))
         if args.cuda: board = board.contiguous().cuda()
-        board = board.view(1, self.board_x, self.board_y)
+        board = board.view(1, (self.board_x) * (self.board_y+1)) # board.view(1, self.board_x, self.board_y) 
         self.nnet.eval()
         with torch.no_grad():
             pi, v = self.nnet(board)

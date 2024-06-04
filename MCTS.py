@@ -8,7 +8,7 @@ EPS = 1e-8
 log = logging.getLogger(__name__)
 
 
-class MCTS():
+class MCTS:
     """
     This class handles the MCTS tree.
     """
@@ -35,10 +35,16 @@ class MCTS():
                    proportional to Nsa[(s,a)]**(1./temp)
         """
         for i in range(self.args.numMCTSSims):
+            # print(f"Search number {i}")
             self.search(canonicalBoard)
 
         s = self.game.stringRepresentation(canonicalBoard)
-        counts = [self.Nsa[(s, a)] if (s, a) in self.Nsa else 0 for a in range(self.game.getActionSize())]
+        # print(s)
+        counts = [
+            self.Nsa[(s, a)] if (s, a) in self.Nsa else 0
+            for a in range(self.game.getActionSize())
+        ]
+        # print(counts)
 
         if temp == 0:
             bestAs = np.array(np.argwhere(counts == np.max(counts))).flatten()
@@ -47,7 +53,7 @@ class MCTS():
             probs[bestA] = 1
             return probs
 
-        counts = [x ** (1. / temp) for x in counts]
+        counts = [x ** (1.0 / temp) for x in counts]
         counts_sum = float(sum(counts))
         probs = [x / counts_sum for x in counts]
         return probs
@@ -79,6 +85,12 @@ class MCTS():
         if self.Es[s] != 0:
             # terminal node
             return -self.Es[s]
+        
+        # print("Looking at: ")
+        # print(canonicalBoard)
+        # print(s)
+        # print(f"Is new? {s not in self.Ps}")
+        # exit()
 
         if s not in self.Ps:
             # leaf node
@@ -92,40 +104,54 @@ class MCTS():
                 # if all valid moves were masked make all valid moves equally probable
 
                 # NB! All valid moves may be masked if either your NNet architecture is insufficient or you've get overfitting or something else.
-                # If you have got dozens or hundreds of these messages you should pay attention to your NNet and/or training process.   
+                # If you have got dozens or hundreds of these messages you should pay attention to your NNet and/or training process.
                 log.error("All valid moves were masked, doing a workaround.")
                 self.Ps[s] = self.Ps[s] + valids
                 self.Ps[s] /= np.sum(self.Ps[s])
 
             self.Vs[s] = valids
             self.Ns[s] = 0
+            # print(f"Found a leaf node with value: {v}")
+            # print(canonicalBoard)
             return -v
+        
+        # print("Not new continuing")
 
         valids = self.Vs[s]
-        cur_best = -float('inf')
+        cur_best = -float("inf")
         best_act = -1
+
+        # print("valids")
+        # print(valids)
 
         # pick the action with the highest upper confidence bound
         for a in range(self.game.getActionSize()):
             if valids[a]:
                 if (s, a) in self.Qsa:
-                    u = self.Qsa[(s, a)] + self.args.cpuct * self.Ps[s][a] * math.sqrt(self.Ns[s]) / (
-                            1 + self.Nsa[(s, a)])
+                    u = self.Qsa[(s, a)] + self.args.cpuct * self.Ps[s][a] * math.sqrt(
+                        self.Ns[s]
+                    ) / (1 + self.Nsa[(s, a)])
                 else:
-                    u = self.args.cpuct * self.Ps[s][a] * math.sqrt(self.Ns[s] + EPS)  # Q = 0 ?
+                    u = (
+                        self.args.cpuct * self.Ps[s][a] * math.sqrt(self.Ns[s] + EPS)
+                    )  # Q = 0 ?
 
                 if u > cur_best:
                     cur_best = u
                     best_act = a
 
         a = best_act
+        # print(f"best move: {a}")
+        # print(canonicalBoard)
         next_s, next_player = self.game.getNextState(canonicalBoard, 1, a)
         next_s = self.game.getCanonicalForm(next_s, next_player)
 
         v = self.search(next_s)
 
         if (s, a) in self.Qsa:
-            self.Qsa[(s, a)] = (self.Nsa[(s, a)] * self.Qsa[(s, a)] + v) / (self.Nsa[(s, a)] + 1)
+            self.Qsa[(s, a)] = (self.Nsa[(s, a)] * self.Qsa[(s, a)] + v) / (
+                self.Nsa[(s, a)] + 1
+            )
             self.Nsa[(s, a)] += 1
 
         else:

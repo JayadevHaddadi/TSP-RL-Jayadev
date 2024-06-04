@@ -68,7 +68,7 @@ class MancalaGame(Game):
         if b.has_legal_moves(player) and b.has_legal_moves(-player):
             return 0
         b.end_game()
-        if b.count_final_score(player) > 0:
+        if b.countDiff(player) > 0:
             return 1
         return -1
 
@@ -79,7 +79,7 @@ class MancalaGame(Game):
         # print(board)
         if player == 1:
             return board
-        return np.array([row[::-1] for row in board[::-1]])
+        return [row[::-1] for row in board[::-1]] #removed the array so it is same one, not a new one
 
     def getSymmetries(self, board, pi):
         # mirror, rotational
@@ -108,8 +108,8 @@ class MancalaGame(Game):
         row = board.shape[0]
         col = board.shape[1]
 
-        print("   ", end="")
-        for y in range(col):
+        print("     ", end="")
+        for y in range(col-2,-1,-1):
             print(y, end=" ")
         print("")
         print("-----------------------")
@@ -121,3 +121,8 @@ class MancalaGame(Game):
             print("|")
 
         print("-----------------------")
+        
+        print("   ", end="")
+        for y in range(col-1):
+            print(y, end=" ")
+        print()

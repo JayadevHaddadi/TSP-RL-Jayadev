@@ -22,7 +22,7 @@ class HumanMancalaGamePlayer():
         valid = self.game.getValidMoves(board, 1)
         for i in range(len(valid)):
             if valid[i]:
-                print("[", 0, self.game.pockert_per_row, end="] ")
+                print("[", i, end="] ")
         while True:
             input_move = input()
             try:

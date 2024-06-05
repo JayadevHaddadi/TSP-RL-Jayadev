@@ -82,13 +82,13 @@ class MancalaGame(Game):
         # print(board)
         if player == 1:
             return board
-        return [row[::-1] for row in board[::-1]] #removed the array so it is same one, not a new one
+        return np.array([row[::-1] for row in board[::-1]]) #removed the array so it is same one, not a new one
 
     def getSymmetries(self, board, pi):
         # 180 rotation only
         assert len(pi) == self.pockert_per_row
-        pi_board = pi[:-1]
-        l = [(board, pi), (self.getCanonicalForm(board,1), pi_board)]
+        pi_board = pi[::-1]
+        l = [(board, pi), (self.getCanonicalForm(board,-1), pi_board)]
 
         return l
 

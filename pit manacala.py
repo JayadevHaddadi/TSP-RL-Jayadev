@@ -45,4 +45,4 @@ player2 = HumanMancalaGamePlayer(g).play
 
 arena = Arena.Arena(n1p, player2, g, display=MancalaGame.display)
 
-print(arena.playGames(2, verbose=True))
+print(arena.playGames(1, verbose=True))

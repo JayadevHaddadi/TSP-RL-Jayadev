@@ -50,14 +50,14 @@ class Board:
     def get_legal_moves(self, player):
         """1 for each pocket that is positive, 0 for rest
         """
-        print("printing the board to check legals move for player",player)
-        print(self.pieces)
+        # print("printing the board to check legals move for player",player)
+        # print(self.pieces)
         
         if player == 1:
-            print([1 if count > 0 else 0 for count in self.pieces[0][1:]])
+            # print([1 if count > 0 else 0 for count in self.pieces[0][1:]])
             return [1 if count > 0 else 0 for count in self.pieces[0][:0:-1]]
         else:
-            print([1 if count > 0 else 0 for count in self.pieces[1][:self.pocket_per_row]])
+            # print([1 if count > 0 else 0 for count in self.pieces[1][:self.pocket_per_row]])
             return [1 if count > 0 else 0 for count in self.pieces[1][:self.pocket_per_row]]
 
     def has_legal_moves(self, player):
@@ -68,28 +68,48 @@ class Board:
 
         # Add the piece to the empty square.
         # print(move)
-
+        #     5  4  3  2  1  0
         # (0)(4)(4)(4)(4)(4)(4)
         # (4)(4)(4)(4)(4)(4)(0)
+        #  0  1  2  3  4  5
         if player == 1: #if first player his col is move+1
-            col = move + 1
+            row = 0
+            col = self.pocket_per_row - move 
         else:
+            row = 1
             col = move
         
         # print("move",player,move)
         # print(self.pieces)
-        row = self.__player_to_row[player]
         stones = self[row][col]
         if stones == 0:
             raise Exception("Illigal move to take 0 stones")
 
         self[row][col] = 0
-        self.add_stones(player, (row, col), stones)
+        return self.add_stones(player, (row, col), stones)
 
     def add_stones(self, player, position, stones_left):
-        if stones_left == 0:
-            return
         row, col = position
+        if stones_left == 0:
+            # print("ENDING", player , row ,col, self[0][col], self[1][col-1])
+            #if we ended up at empty spot we can take stone of others accross
+            if player == 1 and row == 0 and col != 0 and self[0][col]==1:
+                self[0][0] += self[1][col-1] + self[0][col] 
+                self[1][col-1] = 0   
+                self[0][col] = 0
+
+            if player == -1 and row == 1 and col != self.pocket_per_row and self[1][col]==1:
+                self[1][self.pocket_per_row] += self[0][col+1] + self[1][col]
+                self[0][col+1] = 0 
+                self[1][col] = 0
+
+            # get one more move if one ends in ones own mancala
+            if player == 1 and row == 0 and col == 0:
+                return 1
+            if player == -1 and row == 1 and col == self.pocket_per_row:
+                return 1
+            
+            return 0 # no more moves
         if row == 0:
             if col > 1 or (col == 1 and player == 1): #either above first mancala or first player and about to put in their own mancala
                 self[0][col - 1] += 1

@@ -50,8 +50,11 @@ class MancalaGame(Game):
             raise Exception("Action out of range")
         b = Board(self.pockert_per_row,0)
         b.pieces = np.copy(board)
-        b.execute_move(action, player)
-        return (b.pieces, -player) # bitwise xor so 0->1 and 1->0
+        extra_move = b.execute_move(action, player)
+        if extra_move:
+            return (b.pieces, player) 
+        else:
+            return (b.pieces, -player) 
 
     def getValidMoves(self, board, player):
         # return a fixed size binary vector
@@ -82,7 +85,7 @@ class MancalaGame(Game):
         return [row[::-1] for row in board[::-1]] #removed the array so it is same one, not a new one
 
     def getSymmetries(self, board, pi):
-        # mirror, rotational
+        # 180 rotation only
         assert len(pi) == self.pockert_per_row
         pi_board = pi[:-1]
         l = [(board, pi), (self.getCanonicalForm(board,1), pi_board)]
@@ -110,19 +113,26 @@ class MancalaGame(Game):
 
         print("     ", end="")
         for y in range(col-2,-1,-1):
-            print(y, end=" ")
+            print(y, end="  ")
         print("")
-        print("-----------------------")
-        for y in range(row):
-            print(y, "|", end="")  # print the row #
-            for x in range(col):
-                piece = board[y][x]  # get the piece to print
-                print(piece, end=" ")
-            print("|")
+        print("-------------------------")
+        print("|  |", end="")  # print the row #
+        for x in range(1,col):
+            piece = board[0][x]  # get the piece to print
+            print(f"{piece:2}", end=" ")
+        print("|  | <-- Player  1")
 
-        print("-----------------------")
+        print(f"|{board[0][0]:2}|                  |{board[1][col-1]:2}|")
+
+        print("|  |", end="")  # print the row #
+        for x in range(col-1):
+            piece = board[1][x]  # get the piece to print
+            print(f"{piece:2}", end=" ")
+        print("|  | <-- Player -1")
+
+        print("-------------------------")
         
-        print("   ", end="")
+        print("     ", end="")
         for y in range(col-1):
-            print(y, end=" ")
+            print(y, end="  ")
         print()

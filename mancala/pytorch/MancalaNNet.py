@@ -17,14 +17,16 @@ class MancalaNNet(nn.Module):
 
         super(MancalaNNet, self).__init__()
         self.fc01 = nn.Linear(self.board_x*(self.board_y+1), 1024) # 14
-        self.fc02 = nn.Linear(1024, 1024)
-        self.fc03 = nn.Linear(1024, 512)
-
         self.bn01 = nn.BatchNorm1d(1024)
+
+        self.fc02 = nn.Linear(1024, 1024)
         self.bn02 = nn.BatchNorm1d(1024)
+
+        self.fc03 = nn.Linear(1024, 512)
         self.bn03 = nn.BatchNorm1d(512)
 
         self.fc3 = nn.Linear(512, self.action_size)
+        
         self.fc4 = nn.Linear(512, 1)
 
     def forward(self, s):

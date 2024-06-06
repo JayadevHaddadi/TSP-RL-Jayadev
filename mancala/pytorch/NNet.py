@@ -17,7 +17,7 @@ from .MancalaNNet import MancalaNNet as mnet
 args = dotdict({
     'lr': 0.001,
     'dropout': 0.3,
-    'epochs': 1, #use to be 10 yar
+    'epochs': 10, #use to be 10 yar
     'batch_size': 64,
     'cuda': torch.cuda.is_available(),
     'num_channels': 512,

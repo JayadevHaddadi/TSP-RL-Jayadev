@@ -26,7 +26,7 @@ args = dotdict(
         "load_model": True,  # False originally
         "load_folder_file": ("./mtemp", "best.pth.tar"),  # dev/models/8x100x50
         "load_examples": True,  # my new addition not yet hooked up yar
-        "load_examples_folder_file": ("./mtemp", "checkpoint_13.pth.tar"),
+        "load_examples_folder_file": ("./mtemp", "checkpoint_3.pth.tar"),
         "numItersForTrainExamplesHistory": 20,
     }
 )

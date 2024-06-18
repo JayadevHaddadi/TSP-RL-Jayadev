@@ -11,8 +11,6 @@ Player 1 Mancala ---> (0)(4)(4)(4)(4)(4)(4)
 
 class Board:
 
-    __player_to_row = {1:0,-1:1}
-
     def __init__(self, pocket_per_row = 6, stones_per_pocket = 4):
         "Set up initial board configuration."
 

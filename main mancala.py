@@ -22,12 +22,12 @@ args = dotdict(
         "numMCTSSims": 25,  # Number of games moves for MCTS to simulate.
         "arenaCompare": 40,  # Number of games to play during arena play to determine if new net will be accepted.
         "cpuct": 1,
-        "checkpoint": "./mtemp/",
-        "load_model": True,  # False originally
-        "load_folder_file": ("./mtemp", "best.pth.tar"),  # dev/models/8x100x50
-        "load_examples": True,  # my new addition not yet hooked up yar
-        "load_examples_folder_file": ("./mtemp", "checkpoint_3.pth.tar"),
-        "numItersForTrainExamplesHistory": 20,
+        "checkpoint": "./ml3temp/",
+        "load_model": False,  # False originally
+        "load_folder_file": ("./ml3temp", "best.pth.tar"),  
+        "load_examples": False,  # my new addition not yet hooked up yar
+        "load_examples_folder_file": ("./ml2temp", "checkpoint_3.pth.tar"),
+        "numItersForTrainExamplesHistory": 40,
     }
 )
 

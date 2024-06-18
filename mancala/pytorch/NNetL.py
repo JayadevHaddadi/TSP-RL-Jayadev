@@ -12,7 +12,7 @@ from NeuralNet import NeuralNet
 import torch
 import torch.optim as optim
 
-from .MancalaNNet import MancalaNNet as mnet
+from .MancalaNNetLarge import MancalaNNet as mnet
 
 args = dotdict({
     'dropout': 0.3,
@@ -22,7 +22,7 @@ args = dotdict({
 })
 
 
-class NNetWrapper(NeuralNet):
+class NNetWrapperL(NeuralNet):
     def __init__(self, game):
         self.nnet = mnet(game, args)
         self.board_x, self.board_y = game.getBoardSize()

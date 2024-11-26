@@ -14,7 +14,7 @@ use this script to play any two agents against each other, or play manually with
 any agent.
 """
 
-human_vs_cpu = True
+human_vs_cpu = False
 
 g = MancalaGame(6)
 
@@ -43,8 +43,9 @@ else:
     # mcts2 = MCTS(g, n2, args2)
     # n2p = lambda x: np.argmax(mcts2.getActionProb(x, temp=0))
 
-    player2 = n2p  # Player 2 is neural network if it's cpu vs cpu.
+    player2 = gp  # Player 2 is neural network if it's cpu vs cpu.
 
 arena = Arena.Arena(n1p, player2, g, display=MancalaGame.display)
 
-print(arena.playGames(10, verbose=True))
+print(arena.playGames(10, verbose=False))
+

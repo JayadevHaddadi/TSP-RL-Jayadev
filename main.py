@@ -3,9 +3,10 @@ import logging
 import coloredlogs
 
 from Coach import Coach
-from othello.OthelloGame import OthelloGame as Game
-from othello.pytorch.NNet import NNetWrapper as nn
+from TSP.TSPGame import TSPGame as Game
+from TSP.pytorch.NNet import NNetWrapper as nn
 from utils import *
+import torch
 
 log = logging.getLogger(__name__)
 
@@ -30,8 +31,9 @@ args = dotdict({
 
 
 def main():
+    log.info('Cuda: %s', torch.cuda.is_available())
     log.info('Loading %s...', Game.__name__)
-    g = Game(6)
+    g = Game(6)  # Initialize TSP game with 6 nodes  # Initialize TSP game without specifying number of players
 
     log.info('Loading %s...', nn.__name__)
     nnet = nn(g)
@@ -43,7 +45,7 @@ def main():
         log.warning('Not loading a checkpoint!')
 
     log.info('Loading the Coach...')
-    c = Coach(g, nnet, args)
+    c = Coach(g, nnet, args)  # Coach adapted for single-player TSP
 
     if args.load_model:
         log.info("Loading 'trainExamples' from file...")

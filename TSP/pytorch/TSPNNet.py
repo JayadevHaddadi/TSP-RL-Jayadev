@@ -1,131 +1,83 @@
-import os
-import sys
-import time
-
-import numpy as np
-from tqdm import tqdm
-
-sys.path.append('../../')
-from utils import *
-from NeuralNet import NeuralNet
-
 import torch
-import torch.optim as optim
+import torch.nn as nn
+import torch.nn.functional as F
 
-from .TSPNNet import NNet as net  # Import the TSP-specific neural network class
+class TSPNNet(nn.Module):
+    def __init__(self, game, args):
+        super(TSPNNet, self).__init__()
+        self.args = args
 
-args = dotdict({
-    'lr': 0.001,
-    'dropout': 0.3,
-    'epochs': 10,
-    'batch_size': 64,
-    'cuda': torch.cuda.is_available(),
-    'num_channels': 128,
-})
-
-class NNetWrapper(NeuralNet):
-    def __init__(self, game):
-        self.nnet = net(game, args)
-        self.board_size = game.getBoardSize()  # For TSP, this is (num_nodes,)
+        # Game parameters
+        self.num_nodes = game.getBoardSize()[0]
         self.action_size = game.getActionSize()
 
-        if args.cuda:
-            self.nnet.cuda()
+        # Node feature size (e.g., x, y, tour_position)
+        self.node_feature_size = 3
 
-    def train(self, examples):
+        # Hidden dimensions
+        self.hidden_dim = 128
+
+        # Graph convolutional layers
+        self.gc1 = nn.Linear(self.node_feature_size, self.hidden_dim)
+        self.gc2 = nn.Linear(self.hidden_dim, self.hidden_dim)
+
+        # Fully connected layers after graph convolutions
+        self.fc1 = nn.Linear(self.hidden_dim, 256)
+        self.fc2 = nn.Linear(256, 128)
+
+        # Policy head
+        self.fc_pi = nn.Linear(128, self.action_size)
+
+        # Value head
+        self.fc_v = nn.Linear(128, 1)
+
+    def forward(self, node_features, adjacency_matrix):
         """
-        examples: list of examples, each example is of form (board, pi, v)
+        node_features: tensor of shape [batch_size, num_nodes, node_feature_size]
+        adjacency_matrix: tensor of shape [batch_size, num_nodes, num_nodes]
         """
-        optimizer = optim.Adam(self.nnet.parameters(), lr=args.lr)
+        batch_size = node_features.size(0)
 
-        for epoch in range(args.epochs):
-            print('EPOCH ::: ' + str(epoch + 1))
-            self.nnet.train()
-            pi_losses = AverageMeter()
-            v_losses = AverageMeter()
+        # First graph convolutional layer
+        x = self.graph_conv(node_features, adjacency_matrix, self.gc1)
+        x = F.relu(x)
+        x = F.dropout(x, p=self.args.dropout, training=self.training)
 
-            batch_count = int(len(examples) / args.batch_size)
-            if batch_count == 0:
-                batch_count = 1
+        # Second graph convolutional layer
+        x = self.graph_conv(x, adjacency_matrix, self.gc2)
+        x = F.relu(x)
+        x = F.dropout(x, p=self.args.dropout, training=self.training)
 
-            t = tqdm(range(batch_count), desc='Training Net')
-            for _ in t:
-                sample_ids = np.random.randint(len(examples), size=args.batch_size)
-                boards, target_pis, target_vs = list(zip(*[examples[i] for i in sample_ids]))
-                boards = torch.FloatTensor(np.array(boards).astype(np.float64))
-                target_pis = torch.FloatTensor(np.array(target_pis).astype(np.float64))
-                target_vs = torch.FloatTensor(np.array(target_vs).astype(np.float64))
+        # Aggregate node features by mean pooling
+        x = x.mean(dim=1)  # Shape: [batch_size, hidden_dim]
 
-                # Move to GPU if available
-                if args.cuda:
-                    boards, target_pis, target_vs = boards.cuda(), target_pis.cuda(), target_vs.cuda()
+        # Fully connected layers
+        x = F.relu(self.fc1(x))
+        x = F.dropout(x, p=self.args.dropout, training=self.training)
+        x = F.relu(self.fc2(x))
+        x = F.dropout(x, p=self.args.dropout, training=self.training)
 
-                # Prepare input
-                boards = boards.view(-1, *self.board_size)  # For TSP, boards are 1D arrays
+        # Policy head
+        pi = self.fc_pi(x)  # Shape: [batch_size, action_size]
+        pi = F.softmax(pi, dim=1)
 
-                # Compute output
-                out_pi, out_v = self.nnet(boards)
-                l_pi = self.loss_pi(target_pis, out_pi)
-                l_v = self.loss_v(target_vs, out_v)
-                total_loss = l_pi + l_v
-
-                # Record loss
-                pi_losses.update(l_pi.item(), boards.size(0))
-                v_losses.update(l_v.item(), boards.size(0))
-                t.set_postfix(Loss_pi=pi_losses.avg, Loss_v=v_losses.avg)
-
-                # Backpropagation and optimization step
-                optimizer.zero_grad()
-                total_loss.backward()
-                optimizer.step()
-
-    def predict(self, board):
-        """
-        board: np array with board (tour)
-        """
-        # Timing
-        start = time.time()
-
-        # Preparing input
-        board = torch.FloatTensor(board.astype(np.float64))
-        if args.cuda:
-            board = board.cuda()
-        board = board.view(1, -1)  # For TSP, the board is a 1D array
-
-        self.nnet.eval()
-        with torch.no_grad():
-            pi, v = self.nnet(board)
-
-        # Convert outputs to numpy arrays
-        pi = torch.exp(pi).cpu().numpy()[0]  # If outputs are log probabilities
-        v = v.cpu().numpy()[0]
-
-        # Debugging statement (optional)
-        # print('PREDICTION TIME TAKEN : {0:03f}'.format(time.time() - start))
+        # Value head
+        v = self.fc_v(x)  # Shape: [batch_size, 1]
+        v = torch.tanh(v)
 
         return pi, v
 
-    def loss_pi(self, targets, outputs):
-        # Cross-entropy loss for policy
-        return -torch.sum(targets * outputs) / targets.size()[0]
+    def graph_conv(self, node_features, adjacency_matrix, linear_layer):
+        """
+        Simplified graph convolution operation.
+        """
+        degrees = adjacency_matrix.sum(dim=-1, keepdim=True) + 1e-6
+        norm_adj = adjacency_matrix / degrees
 
-    def loss_v(self, targets, outputs):
-        # Mean squared error loss for value
-        return torch.sum((targets - outputs.view(-1)) ** 2) / targets.size()[0]
+        # Aggregate neighboring node features
+        agg_features = torch.bmm(norm_adj, node_features)
 
-    def save_checkpoint(self, folder='checkpoint', filename='checkpoint.pth.tar'):
-        filepath = os.path.join(folder, filename)
-        if not os.path.exists(folder):
-            print("Checkpoint Directory does not exist! Making directory {}".format(folder))
-            os.mkdir(folder)
-        else:
-            print("Checkpoint Directory exists!")
-        torch.save({'state_dict': self.nnet.state_dict()}, filepath)
+        # Apply linear transformation
+        out = linear_layer(agg_features)
 
-    def load_checkpoint(self, folder='checkpoint', filename='checkpoint.pth.tar'):
-        filepath = os.path.join(folder, filename)
-        if not os.path.exists(filepath):
-            raise Exception("No model in path {}".format(filepath))
-        map_location = None if args.cuda else 'cpu'
-        checkpoint = torch.load(filepath, map_location=map_location)
-        self.nnet.load_state_dict(checkpoint['state_dict'])
+        return out

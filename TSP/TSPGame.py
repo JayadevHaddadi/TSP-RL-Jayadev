@@ -2,12 +2,11 @@ from __future__ import print_function
 import sys
 
 sys.path.append("..")
-from Game import Game
-from .TSPLogic import TSPBoard
+from .TSPState import TSPState
 import numpy as np
 
 
-class TSPGame(Game):
+class TSPGame:
 
     def __init__(self, num_nodes, node_coordinates):
         """
@@ -26,7 +25,7 @@ class TSPGame(Game):
 
         For TSP, this could be a random tour or a fixed starting point.
         """
-        b = TSPBoard(self.num_nodes, self.node_coordinates)
+        b = TSPState(self.num_nodes, self.node_coordinates)
         return b.get_initial_state()
 
     def getBoardSize(self):
@@ -47,37 +46,35 @@ class TSPGame(Game):
         The number of possible 2-opt moves is (n*(n-1))/2
         """
         return (self.num_nodes * (self.num_nodes - 1)) // 2
-
-    def getNextState(self, board, player, action):
+    
+    def getNextState(self, board, action):
         """
-        Given the current state, player, and action, return the next state and next player.
+        Given the current state and action, return the next state.
 
         Args:
             board (np.array): Current tour.
-            player (int): Current player (always 1 for TSP).
             action (int): Action to apply (index of the possible action).
 
         Returns:
-            (next_board, next_player)
+            next_board (np.array): The new tour after applying the action.
         """
-        b = TSPBoard(self.num_nodes, self.node_coordinates)
+        b = TSPState(self.num_nodes, self.node_coordinates)
         b.set_state(np.copy(board))
         b.execute_action(action)
-        # For TSP, player remains the same
-        return (b.get_state(), player)
+        return b.get_state()
 
-    def getValidMoves(self, board, player):
+    def getValidMoves(self, board):
         """
         Return a binary vector of valid moves.
 
         For TSP, all 2-opt moves are usually valid.
         """
-        b = TSPBoard(self.num_nodes, self.node_coordinates)
+        b = TSPState(self.num_nodes, self.node_coordinates)
         b.set_state(np.copy(board))
         valid_moves = b.get_valid_actions()
         return np.array(valid_moves)
 
-    def getGameEnded(self, board, player):
+    def getGameEnded(self, board):
         """
         Return the game result.
 
@@ -87,7 +84,7 @@ class TSPGame(Game):
         Returns:
             result (float): 0 if game is not ended, otherwise the negative tour length.
         """
-        b = TSPBoard(self.num_nodes, self.node_coordinates)
+        b = TSPState(self.num_nodes, self.node_coordinates)
         b.set_state(np.copy(board))
         if b.is_terminal():
             # Return the negative tour length as the reward to be maximized
@@ -95,38 +92,68 @@ class TSPGame(Game):
         else:
             return 0
 
-    def getCanonicalForm(self, board, player):
+    def getCanonicalForm(self, board):
         """
         Return the canonical form of the board.
 
         For TSP, the canonical form can be the tour starting from a fixed node.
         """
-        b = TSPBoard(self.num_nodes, self.node_coordinates)
+        b = TSPState(self.num_nodes, self.node_coordinates)
         b.set_state(np.copy(board))
         canonical_tour = b.get_canonical_tour()
         return canonical_tour
 
     def getSymmetries(self, board, pi):
         """
-        Return symmetric versions of the board and policy vector.
-
-        For TSP, symmetries could include reversing the tour.
+        Return symmetric versions of the board and policy vector by rearranging
+        node order and adjusting the tour accordingly.
         """
         symmetries = []
-        b = TSPBoard(self.num_nodes, self.node_coordinates)
-        b.set_state(np.copy(board))
-        # Original
+
+        # Original board and pi
         symmetries.append((board, pi))
-        # Reversed tour
-        reversed_board = board[::-1]
-        reversed_pi = pi[::-1]
-        symmetries.append((reversed_board, reversed_pi))
+
+        # Generate permutations of node indices
+        # For example, swap pairs of nodes
+        for i in range(self.num_nodes):
+            for j in range(i+1, self.num_nodes):
+                # Create a copy of node coordinates with nodes i and j swapped
+                new_node_coords = self.node_coordinates.copy()
+                new_node_coords[i], new_node_coords[j] = new_node_coords[j], new_node_coords[i]
+
+                # Adjust the tour order accordingly
+                new_board = board.copy()
+                new_board = [j if x == i else i if x == j else x for x in new_board]
+
+                # Adjust the policy vector accordingly
+                new_pi = pi.copy()
+                # You may need to adjust the indices in pi to match the new node order
+                # This depends on how actions are defined in your implementation
+
+                # Append the new symmetry
+                symmetries.append((new_board, new_pi))
+
         return symmetries
 
+    def getTourLength(self, board):
+        """
+        Computes the tour length for the given board (tour).
+        """
+        length = 0
+        for i in range(len(board)):
+            from_node = board[i]
+            to_node = board[(i + 1) % len(board)]
+            x1, y1 = self.node_coordinates[from_node]
+            x2, y2 = self.node_coordinates[to_node]
+            dist = np.hypot(x2 - x1, y2 - y1)
+            length += dist
+        return length
+
     def stringRepresentation(self, board):
-        """
-        Return a string representation of the board.
-        """
+        # print(board)
+        # print(type(board))
+        # flat_board = [item for sublist in board for item in sublist]
+        # return ",".join(map(str, flat_board))
         return ",".join(map(str, board))
 
     @staticmethod

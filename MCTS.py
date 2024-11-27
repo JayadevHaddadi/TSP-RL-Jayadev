@@ -1,7 +1,8 @@
 import logging
 import math
-
 import numpy as np
+from TSP.TSPGame import TSPGame
+from TSP.TSPState import TSPState
 
 EPS = 1e-8
 
@@ -10,41 +11,39 @@ log = logging.getLogger(__name__)
 
 class MCTS:
     """
-    This class handles the MCTS tree.
+    This class handles the MCTS tree for the Traveling Salesman Problem (TSP).
     """
 
-    def __init__(self, game, nnet, args):
+    def __init__(self, game: TSPGame, nnet, args):
         self.game = game
         self.nnet = nnet
         self.args = args
-        self.Qsa = {}  # stores Q values for s,a (as defined in the paper)
-        self.Nsa = {}  # stores #times edge s,a was visited
-        self.Ns = {}  # stores #times board s was visited
-        self.Ps = {}  # stores initial policy (returned by neural net)
+        self.Q_state_action = {}  # Stores Q values for state-action pairs
+        self.Visits_state_action = {}  # Stores visit counts for state-action pairs
+        self.Visits_state = {}  # Stores visit counts for states
+        self.Policy_state = {}  # Stores initial policy (returned by neural net)
 
-        self.Es = {}  # stores game.getGameEnded ended for board s
-        self.Vs = {}  # stores game.getValidMoves for board s
+        self.Valid_moves_state = {}  # Stores valid moves for states
 
     def getActionProb(self, canonicalBoard, temp=1):
         """
-        This function performs numMCTSSims simulations of MCTS starting from
-        canonicalBoard.
+        Performs MCTS simulations and returns the action probabilities.
+
+        Args:
+            canonicalBoard (np.array): The current state in canonical form.
+            temp (float): Temperature parameter for exploration.
 
         Returns:
-            probs: a policy vector where the probability of the ith action is
-                   proportional to Nsa[(s,a)]**(1./temp)
+            probs (list): A list of action probabilities.
         """
-        for i in range(self.args.numMCTSSims):
-            # print(f"Search number {i}")
+        for _ in range(self.args.numMCTSSims):
             self.search(canonicalBoard)
 
-        s = self.game.stringRepresentation(canonicalBoard)
-        # print(s)
+        stateKey = self.game.stringRepresentation(canonicalBoard)
         counts = [
-            self.Nsa[(s, a)] if (s, a) in self.Nsa else 0
+            self.Visits_state_action.get((stateKey, a), 0)
             for a in range(self.game.getActionSize())
         ]
-        # print(counts)
 
         if temp == 0:
             bestAs = np.array(np.argwhere(counts == np.max(counts))).flatten()
@@ -53,110 +52,112 @@ class MCTS:
             probs[bestA] = 1
             return probs
 
-        counts = [x ** (1.0 / temp) for x in counts]
-        counts_sum = float(sum(counts))
-        probs = [x / counts_sum for x in counts]
+        counts_exp = [x ** (1.0 / temp) for x in counts]
+        counts_sum = float(sum(counts_exp))
+        probs = [x / counts_sum for x in counts_exp]
         return probs
 
-    def search(self, canonicalBoard):
-        """
-        This function performs one iteration of MCTS. It is recursively called
-        till a leaf node is found. The action chosen at each node is one that
-        has the maximum upper confidence bound as in the paper.
+    ending_count=0
+    predict_count=0
+    
+    def search(self, state: TSPState, depth=0, visited=None):
+        if visited is None:
+            visited = set()
 
-        Once a leaf node is found, the neural network is called to return an
-        initial policy P and a value v for the state. This value is propagated
-        up the search path. In case the leaf node is a terminal state, the
-        outcome is propagated up the search path. The values of Ns, Nsa, Qsa are
-        updated.
+        stateKey = self.game.stringRepresentation(state)
 
-        NOTE: the return values are the negative of the value of the current
-        state. This is done since v is in [-1,1] and if v is the value of a
-        state for the current player, then its value is -v for the other player.
+        if stateKey in visited:
+            # Cycle detected
+            print("Cycle detected at state:", stateKey)
+            _, v = self.nnet.predict(state)
+            visited.remove(stateKey)
+            return v
 
-        Returns:
-            v: the negative of the value of the current canonicalBoard
-        """
+        visited.add(stateKey)
 
-        s = self.game.stringRepresentation(canonicalBoard)
+        MAX_DEPTH = self.args.maxDepth
+        if depth >= MAX_DEPTH:
+            # Depth limit reached
+            _, v = self.nnet.predict(state)
+            visited.remove(stateKey)
+            return v
 
-        if s not in self.Es:
-            self.Es[s] = self.game.getGameEnded(canonicalBoard, 1)
-        if self.Es[s] != 0:
-            # terminal node
-            return -self.Es[s]
-        
-        # print("Looking at: ")
-        # print(canonicalBoard)
-        # print(s)
-        # print(f"Is new? {s not in self.Ps}")
-        # exit()
+        if stateKey not in self.Policy_state:
+            # Leaf node: expand and evaluate
+            self.Policy_state[stateKey], v = self.nnet.predict(state)
+            print("NNET", self.Policy_state[stateKey], v)
+            valids = self.game.getValidMoves(state)
+            print("ValidMoves", valids)
 
-        if s not in self.Ps:
-            # leaf node
-            self.Ps[s], v = self.nnet.predict(canonicalBoard)
-            valids = self.game.getValidMoves(canonicalBoard, 1)
-            self.Ps[s] = self.Ps[s] * valids  # masking invalid moves
-            sum_Ps_s = np.sum(self.Ps[s])
+            self.predict_count += 1
+            print("P", self.predict_count)
+            self.Policy_state[stateKey] = (
+                self.Policy_state[stateKey] * valids
+            )  # Mask invalid moves
+            sum_Ps_s = np.sum(self.Policy_state[stateKey])
             if sum_Ps_s > 0:
-                self.Ps[s] /= sum_Ps_s  # renormalize
+                self.Policy_state[stateKey] /= sum_Ps_s  # Renormalize
             else:
-                # if all valid moves were masked make all valid moves equally probable
+                # Handle case where all moves are invalid
+                log.error("All valid moves were masked, assigning equal probabilities.")
+                self.Policy_state[stateKey] = valids / np.sum(valids)
 
-                # NB! All valid moves may be masked if either your NNet architecture is insufficient or you've get overfitting or something else.
-                # If you have got dozens or hundreds of these messages you should pay attention to your NNet and/or training process.
-                log.error("All valid moves were masked, doing a workaround.")
-                self.Ps[s] = self.Ps[s] + valids
-                self.Ps[s] /= np.sum(self.Ps[s])
+            self.Valid_moves_state[stateKey] = valids
+            self.Visits_state[stateKey] = 0
+            visited.remove(stateKey)
+            print("Returning the value from leaf node.")
+            return v  # Return the value from the leaf node
 
-            self.Vs[s] = valids
-            self.Ns[s] = 0
-            # print(f"Found a leaf node with value: {v}")
-            # print(canonicalBoard)
-            return -v
-        
-        # print("Not new continuing")
-
-        valids = self.Vs[s]
+        valids = self.Valid_moves_state[stateKey]
         cur_best = -float("inf")
         best_act = -1
 
-        # print("valids")
-        # print(valids)
-
-        # pick the action with the highest upper confidence bound
-        for a in range(self.game.getActionSize()):
-            if valids[a]:
-                if (s, a) in self.Qsa:
-                    u = self.Qsa[(s, a)] + self.args.cpuct * self.Ps[s][a] * math.sqrt(
-                        self.Ns[s]
-                    ) / (1 + self.Nsa[(s, a)])
+        # Select the action with the highest UCB value
+        for action in range(self.game.getActionSize()):
+            if valids[action]:
+                if (stateKey, action) in self.Q_state_action:
+                    u = self.Q_state_action[
+                        (stateKey, action)
+                    ] + self.args.cpuct * self.Policy_state[stateKey][
+                        action
+                    ] * math.sqrt(
+                        self.Visits_state[stateKey]
+                    ) / (
+                        1 + self.Visits_state_action[(stateKey, action)]
+                    )
                 else:
                     u = (
-                        self.args.cpuct * self.Ps[s][a] * math.sqrt(self.Ns[s] + EPS)
-                    )  # Q = 0 ?
-
+                        self.args.cpuct
+                        * self.Policy_state[stateKey][action]
+                        * math.sqrt(self.Visits_state[stateKey] + EPS)
+                    )
                 if u > cur_best:
                     cur_best = u
-                    best_act = a
+                    best_act = action
 
-        a = best_act
-        # print(f"best move: {a}")
-        # print(canonicalBoard)
-        next_s, next_player = self.game.getNextState(canonicalBoard, 1, a)
-        next_s = self.game.getCanonicalForm(next_s, next_player)
+        if best_act == -1:
+            # No valid action found
+            print("No valid action found at state:", stateKey)
+            visited.remove(stateKey)
+            return 0  # Or an appropriate heuristic value
 
-        v = self.search(next_s)
+        action = best_act
+        next_s = self.game.getNextState(state, action)
+        next_s = self.game.getCanonicalForm(next_s)
+        v = self.search(next_s, depth + 1, visited)
 
-        if (s, a) in self.Qsa:
-            self.Qsa[(s, a)] = (self.Nsa[(s, a)] * self.Qsa[(s, a)] + v) / (
-                self.Nsa[(s, a)] + 1
-            )
-            self.Nsa[(s, a)] += 1
-
+        # Update Qsa, Nsa values
+        sa = (stateKey, action)
+        if sa in self.Q_state_action:
+            self.Q_state_action[sa] = (
+                self.Visits_state_action[sa] * self.Q_state_action[sa] + v
+            ) / (self.Visits_state_action[sa] + 1)
+            self.Visits_state_action[sa] += 1
         else:
-            self.Qsa[(s, a)] = v
-            self.Nsa[(s, a)] = 1
+            self.Q_state_action[sa] = v
+            self.Visits_state_action[sa] = 1
 
-        self.Ns[s] += 1
-        return -v
+        self.Visits_state[stateKey] += 1
+        visited.remove(stateKey)
+        return v  # Return the value to propagate up the tree
+

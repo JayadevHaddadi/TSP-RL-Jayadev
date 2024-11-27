@@ -1,57 +1,72 @@
 import logging
-
 import coloredlogs
+import torch
+import numpy as np
 
 from Coach import Coach
 from TSP.TSPGame import TSPGame as Game
-from TSP.pytorch.NNet import NNetWrapper as nn
+from TSP.pytorch.NNetWrapper import NNetWrapper as neural_net_wrapper
 from utils import *
-import torch
 
 log = logging.getLogger(__name__)
 
-coloredlogs.install(level='INFO')  # Change this to DEBUG to see more info.
+coloredlogs.install(level="INFO")
 
-args = dotdict({
-    'numIters': 1000,
-    'numEps': 100,              # Number of complete self-play games to simulate during a new iteration.
-    'tempThreshold': 15,        #
-    'updateThreshold': 0.6,     # During arena playoff, new neural net will be accepted if threshold or more of games are won.
-    'maxlenOfQueue': 200000,    # Number of game examples to train the neural networks.
-    'numMCTSSims': 25,          # Number of games moves for MCTS to simulate.
-    'arenaCompare': 40,         # Number of games to play during arena play to determine if new net will be accepted.
-    'cpuct': 1,
+args = dotdict(
+    {
+        "numIters": 1000,
+        "numEps": 100,
+        "tempThreshold": 15,
+        "maxlenOfQueue": 200000,
+        "numMCTSSims": 25, #25 original value
+        "cpuct": 1,
+        "checkpoint": "./temp/",
+        "load_model": False,
+        "load_folder_file": ("./temp", "best.pth.tar"),
+        "numItersForTrainExamplesHistory": 20,
 
-    'checkpoint': './temp/',
-    'load_model': False,
-    'load_folder_file': ('/dev/models/8x100x50','best.pth.tar'),
-    'numItersForTrainExamplesHistory': 20,
-
-})
+        'maxSteps': 50,  # Maximum steps per episode
+        'numEpsEval': 20,  # Number of episodes for evaluation
+        'updateThreshold': 0.01,  # Minimum improvement threshold (e.g., 1%)
+        
+        'maxDepth ': 50,
+        "updateThreshold": 0.6, # can be removed?
+        "arenaCompare": 40, # can be removed?
+    }
+)
 
 
 def main():
-    log.info('Cuda: %s', torch.cuda.is_available())
-    log.info('Loading %s...', Game.__name__)
-    g = Game(6)  # Initialize TSP game with 6 nodes  # Initialize TSP game without specifying number of players
+    log.info("CUDA Available: %s", torch.cuda.is_available())
 
-    log.info('Loading %s...', nn.__name__)
-    nnet = nn(g)
+    # Define node coordinates for TSP
+    num_nodes = 10  # Adjust the number of nodes as needed
+    node_coords = np.random.rand(num_nodes, 2).tolist()  # List of (x, y) tuples
+
+    log.info("Initializing %s...", Game.__name__)
+    g = Game(num_nodes, node_coords)  # Initialize TSP game with node coordinates
+
+    log.info("Initializing Neural Network: %s...", neural_net_wrapper.__name__)
+    nnet = neural_net_wrapper(g)
 
     if args.load_model:
-        log.info('Loading checkpoint "%s/%s"...', args.load_folder_file[0], args.load_folder_file[1])
+        log.info(
+            'Loading checkpoint "%s/%s"...',
+            args.load_folder_file[0],
+            args.load_folder_file[1],
+        )
         nnet.load_checkpoint(args.load_folder_file[0], args.load_folder_file[1])
     else:
-        log.warning('Not loading a checkpoint!')
+        log.warning("Not loading a checkpoint! Starting from scratch.")
 
-    log.info('Loading the Coach...')
-    c = Coach(g, nnet, args)  # Coach adapted for single-player TSP
+    log.info("Initializing the Coach...")
+    c = Coach(g, nnet, args)
 
     if args.load_model:
-        log.info("Loading 'trainExamples' from file...")
+        log.info("Loading training examples from file...")
         c.loadTrainExamples()
 
-    log.info('Starting the learning process 🎉')
+    log.info("Starting the learning process 🎉")
     c.learn()
 
 

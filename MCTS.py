@@ -3,6 +3,7 @@ import math
 import numpy as np
 from TSP.TSPGame import TSPGame
 from TSP.TSPState import TSPState
+from TSP.pytorch.NNetWrapper import NNetWrapper
 
 EPS = 1e-8
 
@@ -14,7 +15,7 @@ class MCTS:
     This class handles the MCTS tree for the Traveling Salesman Problem (TSP).
     """
 
-    def __init__(self, game: TSPGame, nnet, args):
+    def __init__(self, game: TSPGame, nnet: NNetWrapper, args):
         self.game = game
         self.nnet = nnet
         self.args = args
@@ -25,7 +26,7 @@ class MCTS:
 
         self.Valid_moves_state = {}  # Stores valid moves for states
 
-    def getActionProb(self, canonicalBoard, temp=1):
+    def getActionProb(self, tsp_state, temp=1):
         """
         Performs MCTS simulations and returns the action probabilities.
 
@@ -37,9 +38,9 @@ class MCTS:
             probs (list): A list of action probabilities.
         """
         for _ in range(self.args.numMCTSSims):
-            self.search(canonicalBoard)
+            self.search(tsp_state)
 
-        stateKey = self.game.stringRepresentation(canonicalBoard)
+        stateKey = self.game.uniqueStringRepresentation(tsp_state)
         counts = [
             self.Visits_state_action.get((stateKey, a), 0)
             for a in range(self.game.getActionSize())
@@ -57,20 +58,20 @@ class MCTS:
         probs = [x / counts_sum for x in counts_exp]
         return probs
 
-    ending_count=0
-    predict_count=0
-    
+    ending_count = 0
+    predict_count = 0
+
     def search(self, state: TSPState, depth=0, visited=None):
         if visited is None:
             visited = set()
 
-        stateKey = self.game.stringRepresentation(state)
+        stateKey = self.game.uniqueStringRepresentation(state)
 
         if stateKey in visited:
             # Cycle detected
-            print("Cycle detected at state:", stateKey)
+            # print("Cycle detected at state:", stateKey)
             _, v = self.nnet.predict(state)
-            visited.remove(stateKey)
+            visited.discard(stateKey)
             return v
 
         visited.add(stateKey)
@@ -79,21 +80,14 @@ class MCTS:
         if depth >= MAX_DEPTH:
             # Depth limit reached
             _, v = self.nnet.predict(state)
-            visited.remove(stateKey)
+            visited.discard(stateKey)
             return v
 
         if stateKey not in self.Policy_state:
             # Leaf node: expand and evaluate
             self.Policy_state[stateKey], v = self.nnet.predict(state)
-            print("NNET", self.Policy_state[stateKey], v)
             valids = self.game.getValidMoves(state)
-            print("ValidMoves", valids)
-
-            self.predict_count += 1
-            print("P", self.predict_count)
-            self.Policy_state[stateKey] = (
-                self.Policy_state[stateKey] * valids
-            )  # Mask invalid moves
+            self.Policy_state[stateKey] = self.Policy_state[stateKey] * valids  # Mask invalid moves
             sum_Ps_s = np.sum(self.Policy_state[stateKey])
             if sum_Ps_s > 0:
                 self.Policy_state[stateKey] /= sum_Ps_s  # Renormalize
@@ -104,8 +98,7 @@ class MCTS:
 
             self.Valid_moves_state[stateKey] = valids
             self.Visits_state[stateKey] = 0
-            visited.remove(stateKey)
-            print("Returning the value from leaf node.")
+            visited.discard(stateKey)
             return v  # Return the value from the leaf node
 
         valids = self.Valid_moves_state[stateKey]
@@ -138,7 +131,7 @@ class MCTS:
         if best_act == -1:
             # No valid action found
             print("No valid action found at state:", stateKey)
-            visited.remove(stateKey)
+            visited.discard(stateKey)
             return 0  # Or an appropriate heuristic value
 
         action = best_act
@@ -158,6 +151,5 @@ class MCTS:
             self.Visits_state_action[sa] = 1
 
         self.Visits_state[stateKey] += 1
-        visited.remove(stateKey)
+        visited.discard(stateKey)
         return v  # Return the value to propagate up the tree
-

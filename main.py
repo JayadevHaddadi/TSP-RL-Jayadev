@@ -3,9 +3,9 @@ import coloredlogs
 import torch
 import numpy as np
 
-from Coach import Coach
 from TSP.TSPGame import TSPGame as Game
 from TSP.pytorch.NNetWrapper import NNetWrapper as neural_net_wrapper
+from Coach import Coach
 from utils import *
 
 log = logging.getLogger(__name__)
@@ -15,23 +15,32 @@ coloredlogs.install(level="INFO")
 args = dotdict(
     {
         "numIters": 1000,
-        "numEps": 100,
+        "numEps": 2, #100
         "tempThreshold": 15,
         "maxlenOfQueue": 200000,
-        "numMCTSSims": 25, #25 original value
+        "numMCTSSims": 25,  # 25 original value
         "cpuct": 1,
         "checkpoint": "./temp/",
         "load_model": False,
         "load_folder_file": ("./temp", "best.pth.tar"),
         "numItersForTrainExamplesHistory": 20,
+        "maxSteps": 50,  # Maximum steps per episode
+        "numEpsEval": 20,  # Number of episodes for evaluation
+        "updateThreshold": 0.01,  # Minimum improvement threshold (e.g., 1%)
 
-        'maxSteps': 50,  # Maximum steps per episode
-        'numEpsEval': 20,  # Number of episodes for evaluation
-        'updateThreshold': 0.01,  # Minimum improvement threshold (e.g., 1%)
-        
-        'maxDepth ': 50,
-        "updateThreshold": 0.6, # can be removed?
-        "arenaCompare": 40, # can be removed?
+        # New updates from ChatGTP
+        "maxDepth": 50,
+        "updateThreshold": 0.6,  # can be removed?
+        "arenaCompare": 40,  # can be removed?
+
+        # For neural Network
+        "lr": 0.001,
+        "dropout": 0.3,
+        "epochs": 10,
+        "batch_size": 64,
+        "cuda": torch.cuda.is_available(),
+        "num_channels": 128,
+        "max_gradient_norm": 5.0,  # Optional: For gradient clipping
     }
 )
 
@@ -40,14 +49,14 @@ def main():
     log.info("CUDA Available: %s", torch.cuda.is_available())
 
     # Define node coordinates for TSP
-    num_nodes = 10  # Adjust the number of nodes as needed
+    num_nodes = 6  # Adjust the number of nodes as needed
     node_coords = np.random.rand(num_nodes, 2).tolist()  # List of (x, y) tuples
 
     log.info("Initializing %s...", Game.__name__)
     g = Game(num_nodes, node_coords)  # Initialize TSP game with node coordinates
 
     log.info("Initializing Neural Network: %s...", neural_net_wrapper.__name__)
-    nnet = neural_net_wrapper(g)
+    nnet = neural_net_wrapper(g, args)
 
     if args.load_model:
         log.info(

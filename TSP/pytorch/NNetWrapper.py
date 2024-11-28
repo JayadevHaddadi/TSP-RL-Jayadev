@@ -5,7 +5,7 @@ import time
 import numpy as np
 from tqdm import tqdm
 
-sys.path.append('../../')
+sys.path.append("../../")
 from utils import *
 from NeuralNet import NeuralNet
 
@@ -14,29 +14,19 @@ import torch.optim as optim
 
 from .TSPNNet import TSPNNet as nnet
 
-args = dotdict({
-    'lr': 0.001,
-    'dropout': 0.3,
-    'epochs': 10,
-    'batch_size': 64,
-    'cuda': torch.cuda.is_available(),
-    'num_channels': 128,
-    'max_gradient_norm': 5.0,  # Optional: For gradient clipping
-})
-
-
 class NNetWrapper(NeuralNet):
-    def __init__(self, game):
+    def __init__(self, game, args):
         self.nnet = nnet(game, args)
         self.game = game
+        self.args = args
         self.board_size = game.getBoardSize()[0]  # Number of nodes
         self.action_size = game.getActionSize()
         self.node_coordinates = np.array(game.node_coordinates)  # Shape: (num_nodes, 2)
 
-        if args.cuda:
+        if self.args.cuda:
             self.nnet.cuda()
-            
-    def prepare_input(self, board):
+
+    def prepare_input(self, tsp_state):
         """
         Prepares the input tensors for the neural network.
 
@@ -53,24 +43,25 @@ class NNetWrapper(NeuralNet):
         # Normalize node coordinates to [0, 1]
         coords_min = node_coords.min(axis=0)
         coords_max = node_coords.max(axis=0)
-        normalized_coords = (node_coords - coords_min) / (coords_max - coords_min + 1e-8)
+        normalized_coords = (node_coords - coords_min) / (
+            coords_max - coords_min + 1e-8
+        )
 
         # Get tour positions and normalize to [0, 1]
         tour_positions = np.zeros(num_nodes)
-        for idx, node in enumerate(board.tour):
+        for idx, node in enumerate(tsp_state.tour):
             tour_positions[node] = idx / (num_nodes - 1)
 
         # Combine features: x, y, position
-        node_features = np.hstack((
-            normalized_coords,
-            tour_positions.reshape(-1, 1)
-        ))  # Shape: (num_nodes, 3)
+        node_features = np.hstack(
+            (normalized_coords, tour_positions.reshape(-1, 1))
+        )  # Shape: (num_nodes, 3)
 
         # Create adjacency matrix based on the current tour
         adjacency_matrix = np.zeros((num_nodes, num_nodes), dtype=np.float32)
         for i in range(num_nodes):
-            from_node = board.tour[i]
-            to_node = board.tour[(i + 1) % num_nodes]
+            from_node = tsp_state.tour[i]
+            to_node = tsp_state.tour[(i + 1) % num_nodes]
             adjacency_matrix[from_node, to_node] = 1
             adjacency_matrix[to_node, from_node] = 1  # Since the graph is undirected
 
@@ -78,7 +69,7 @@ class NNetWrapper(NeuralNet):
         node_features = torch.FloatTensor(node_features)
         adjacency_matrix = torch.FloatTensor(adjacency_matrix)
 
-        if args.cuda:
+        if self.args.cuda:
             node_features = node_features.cuda()
             adjacency_matrix = adjacency_matrix.cuda()
 
@@ -88,10 +79,10 @@ class NNetWrapper(NeuralNet):
         """
         examples: list of examples, each example is of form (board, pi, v)
         """
-        optimizer = optim.Adam(self.nnet.parameters(), lr=args.lr)
+        optimizer = optim.Adam(self.nnet.parameters(), lr = self.args.lr)
 
-        for epoch in range(args.epochs):
-            print('EPOCH ::: ' + str(epoch + 1))
+        for epoch in range(self.args.epochs):
+            print("EPOCH ::: " + str(epoch + 1))
             self.nnet.train()
             pi_losses = AverageMeter()
             v_losses = AverageMeter()
@@ -99,13 +90,15 @@ class NNetWrapper(NeuralNet):
             # Shuffle examples before training
             np.random.shuffle(examples)
 
-            batch_count = int(len(examples) / args.batch_size)
+            batch_count = int(len(examples) /self.args.batch_size)
             if batch_count == 0:
                 batch_count = 1  # Ensure at least one batch
 
-            t = tqdm(range(batch_count), desc='Training Net')
+            t = tqdm(range(batch_count), desc="Training Net")
             for i in t:
-                sample_ids = np.arange(i * args.batch_size, min((i + 1) * args.batch_size, len(examples)))
+                sample_ids = np.arange(
+                    i * self.args.batch_size, min((i + 1) * self.args.batch_size, len(examples))
+                )
                 batch_examples = [examples[j] for j in sample_ids]
 
                 boards, target_pis, target_vs = zip(*batch_examples)
@@ -119,13 +112,17 @@ class NNetWrapper(NeuralNet):
                     adjacency_matrices_list.append(adjacency_matrix)
 
                 # Stack inputs to create batch tensors
-                node_features = torch.stack(node_features_list)  # Shape: [batch_size, num_nodes, node_feature_size]
-                adjacency_matrices = torch.stack(adjacency_matrices_list)  # Shape: [batch_size, num_nodes, num_nodes]
+                node_features = torch.stack(
+                    node_features_list
+                )  # Shape: [batch_size, num_nodes, node_feature_size]
+                adjacency_matrices = torch.stack(
+                    adjacency_matrices_list
+                )  # Shape: [batch_size, num_nodes, num_nodes]
 
                 target_pis = torch.FloatTensor(np.array(target_pis))
                 target_vs = torch.FloatTensor(np.array(target_vs).astype(np.float32))
 
-                if args.cuda:
+                if self.args.cuda:
                     target_pis, target_vs = target_pis.cuda(), target_vs.cuda()
 
                 # Compute output
@@ -139,4 +136,100 @@ class NNetWrapper(NeuralNet):
                 # Record losses
                 pi_losses.update(l_pi.item(), node_features.size(0))
                 v_losses.update(l_v.item(), node_features.size(0))
-                t.
+                t.set_postfix(Loss_pi=pi_losses.avg, Loss_v=v_losses.avg)
+
+                # Backpropagation and optimization step
+                optimizer.zero_grad()
+                total_loss.backward()
+                # Optional: Gradient clipping
+                torch.nn.utils.clip_grad_norm_(
+                    self.nnet.parameters(), self.args.max_gradient_norm
+                )
+                optimizer.step()
+
+    def predict(self, tsp_state):
+        """
+        Predicts the policy and value for the given board.
+
+        Args:
+            board: TSPState instance representing the current state.
+
+        Returns:
+            pi: numpy array of shape [action_size], policy probabilities
+            v: float, value estimate
+        """
+        # Prepare input
+        node_features, adjacency_matrix = self.prepare_input(tsp_state)
+
+        # Add batch dimension
+        node_features = node_features.unsqueeze(
+            0
+        )  # Shape: [1, num_nodes, node_feature_size]
+        adjacency_matrix = adjacency_matrix.unsqueeze(
+            0
+        )  # Shape: [1, num_nodes, num_nodes]
+
+        self.nnet.eval()
+        with torch.no_grad():
+            pi, v = self.nnet(node_features, adjacency_matrix)
+
+        # Convert outputs to numpy arrays
+        pi = pi.cpu().numpy()[0]  # Shape: [action_size]
+        v = v.cpu().item()
+
+        return pi, v
+
+    def loss_pi(self, targets, outputs):
+        """
+        Calculates the policy loss.
+
+        Args:
+            targets: tensor of shape [batch_size, action_size], target policy probabilities
+            outputs: tensor of shape [batch_size, action_size], predicted policy probabilities
+
+        Returns:
+            loss: scalar tensor representing the policy loss
+        """
+        # Use cross-entropy loss
+        loss = -torch.sum(targets * torch.log(outputs + 1e-8)) / targets.size(0)
+        return loss
+
+    def loss_v(self, targets, outputs):
+        """
+        Calculates the value loss.
+
+        Args:
+            targets: tensor of shape [batch_size], target values
+            outputs: tensor of shape [batch_size, 1], predicted values
+
+        Returns:
+            loss: scalar tensor representing the value loss
+        """
+        loss = torch.sum((targets - outputs.view(-1)) ** 2) / targets.size(0)
+        return loss
+
+    def save_checkpoint(self, folder="checkpoint", filename="checkpoint.pth.tar"):
+        filepath = os.path.join(folder, filename)
+        if not os.path.exists(folder):
+            print(
+                "Checkpoint Directory does not exist! Making directory {}".format(
+                    folder
+                )
+            )
+            os.makedirs(folder)
+        else:
+            print("Checkpoint Directory exists!")
+        torch.save(
+            {
+                "state_dict": self.nnet.state_dict(),
+            },
+            filepath,
+        )
+
+    def load_checkpoint(self, folder="checkpoint", filename="checkpoint.pth.tar"):
+        filepath = os.path.join(folder, filename)
+        if not os.path.exists(filepath):
+            raise FileNotFoundError("No model in path {}".format(filepath))
+        map_location = torch.device("cuda" if self.args.cuda else "cpu")
+        checkpoint = torch.load(filepath, map_location=map_location)
+        self.nnet.load_state_dict(checkpoint["state_dict"])

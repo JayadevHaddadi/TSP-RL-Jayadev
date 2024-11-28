@@ -17,8 +17,9 @@ class TSPState:
         self.no_improve_counter = 0
         self.best_length = float("inf")
         self.current_length = float("inf")
+        self.reset_initial_state()
 
-    def get_initial_state(self):
+    def reset_initial_state(self):
         """
         Generate an initial tour.
 
@@ -26,9 +27,9 @@ class TSPState:
         """
         self.tour = list(range(self.num_nodes))
         np.random.shuffle(self.tour)
+        self.tour = self.get_canonical_tour()
         self.current_length = self.get_tour_length()
         self.best_length = self.current_length
-        return np.array(self.tour)
 
     def set_state(self, tour):
         """
@@ -39,6 +40,7 @@ class TSPState:
         """
         self.tour = list(tour)
         self.current_length = self.get_tour_length()
+        self.tour = self.get_canonical_tour()
 
     def get_state(self):
         """
@@ -61,6 +63,7 @@ class TSPState:
         i, j = self.action_index_to_edges(action)
         self.two_opt_swap(i, j)
         self.current_length = self.get_tour_length()
+        self.tour = self.get_canonical_tour()
 
     def get_valid_actions(self):
         """
@@ -107,7 +110,7 @@ class TSPState:
         if reversed_tour < canonical_tour:
             canonical_tour = reversed_tour
 
-        return np.array(canonical_tour)
+        return canonical_tour
 
     def action_index_to_edges(self, action_index):
         """

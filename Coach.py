@@ -1,16 +1,14 @@
 import logging
 import os
 import sys
-from collections import deque
 from pickle import Pickler, Unpickler
 from random import shuffle
 
 import numpy as np
 from tqdm import tqdm
 
-from Arena import Arena
 from MCTS import MCTS
-from .TSP.pytorch.NNetWrapper import NNetWrapper
+from TSP.pytorch.NNetWrapper import NNetWrapper
 
 from TSP.TSPGame import TSPGame
 
@@ -26,12 +24,12 @@ class Coach:
     def __init__(self, game: TSPGame, nnet: NNetWrapper, args):
         self.game = game
         self.nnet = nnet
+        self.pnet = nnet.__class__(game, args)  # Initialize the previous network
         self.args = args
         self.mcts = MCTS(self.game, self.nnet, self.args)
-        self.trainExamplesHistory = (
-            []
-        )  # history of examples from args.numItersForTrainExamplesHistory latest iterations
-        self.skipFirstSelfPlay = False  # can be overriden in loadTrainExamples()
+        self.trainExamplesHistory = []
+        self.skipFirstSelfPlay = False
+
 
     def executeEpisode(self):
         """
@@ -44,28 +42,27 @@ class Coach:
                         pi is the MCTS-informed policy vector, v is the negative tour length.
         """
         trainExamples = []
-        board = self.game.getInitBoard()
+        tsp_state = self.game.getInitBoard()
         episodeStep = 0
 
         maxSteps = self.args.maxSteps  # Define this in your arguments
 
         while episodeStep < maxSteps:
             episodeStep += 1
-            canonicalBoard = self.game.getCanonicalForm(board)
             temp = int(episodeStep < self.args.tempThreshold)
 
-            pi = self.mcts.getActionProb(canonicalBoard, temp=temp)
+            pi = self.mcts.getActionProb(tsp_state, temp=temp)
 
             # Apply data augmentation by rearranging node and tour order
-            symmetries = self.game.getSymmetries(canonicalBoard, pi)
+            symmetries = self.game.getSymmetries(tsp_state, pi)
             for b, p in symmetries:
                 trainExamples.append([b, p, None])
 
             action = np.random.choice(len(pi), p=pi)
-            board = self.game.getNextState(board, action)
+            tsp_state = self.game.getNextState(tsp_state, action)
 
         # After the episode ends, compute the final tour length
-        final_tour_length = self.game.getTourLength(board)
+        final_tour_length = self.game.getTourLength(tsp_state)
         value = -final_tour_length  # Negative tour length as value to minimize
 
         # Assign the value to all examples
@@ -73,13 +70,6 @@ class Coach:
 
 
     def learn(self):
-        """
-        Performs numIters iterations with numEps episodes of self-play in each
-        iteration. After every iteration, it retrains the neural network with
-        examples in trainExamples (which has a maximum length of maxlenOfQueue).
-        Since TSP is a single-player game, we can evaluate the new network
-        based on the improvement in tour length.
-        """
         for i in range(1, self.args.numIters + 1):
             log.info(f"Starting Iter #{i} ...")
 
@@ -127,6 +117,7 @@ class Coach:
             else:
                 log.info("REJECTING NEW MODEL")
                 self.nnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
+
 
     def evaluateNetwork(self, mcts):
         """

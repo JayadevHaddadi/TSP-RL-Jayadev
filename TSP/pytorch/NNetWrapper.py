@@ -14,6 +14,7 @@ import torch.optim as optim
 
 from .TSPNNet import TSPNNet as nnet
 
+
 class NNetWrapper(NeuralNet):
     def __init__(self, game, args):
         self.nnet = nnet(game, args)
@@ -79,7 +80,7 @@ class NNetWrapper(NeuralNet):
         """
         examples: list of examples, each example is of form (board, pi, v)
         """
-        optimizer = optim.Adam(self.nnet.parameters(), lr = self.args.lr)
+        optimizer = optim.Adam(self.nnet.parameters(), lr=self.args.lr)
 
         for epoch in range(self.args.epochs):
             print("EPOCH ::: " + str(epoch + 1))
@@ -90,14 +91,15 @@ class NNetWrapper(NeuralNet):
             # Shuffle examples before training
             np.random.shuffle(examples)
 
-            batch_count = int(len(examples) /self.args.batch_size)
+            batch_count = int(len(examples) / self.args.batch_size)
             if batch_count == 0:
                 batch_count = 1  # Ensure at least one batch
 
             t = tqdm(range(batch_count), desc="Training Net")
             for i in t:
                 sample_ids = np.arange(
-                    i * self.args.batch_size, min((i + 1) * self.args.batch_size, len(examples))
+                    i * self.args.batch_size,
+                    min((i + 1) * self.args.batch_size, len(examples)),
                 )
                 batch_examples = [examples[j] for j in sample_ids]
 
@@ -211,25 +213,13 @@ class NNetWrapper(NeuralNet):
     def save_checkpoint(self, folder="checkpoint", filename="checkpoint.pth.tar"):
         filepath = os.path.join(folder, filename)
         if not os.path.exists(folder):
-            print(
-                "Checkpoint Directory does not exist! Making directory {}".format(
-                    folder
-                )
-            )
             os.makedirs(folder)
-        else:
-            print("Checkpoint Directory exists!")
-        torch.save(
-            {
-                "state_dict": self.nnet.state_dict(),
-            },
-            filepath,
-        )
+        torch.save(self.nnet.state_dict(), filepath)
 
     def load_checkpoint(self, folder="checkpoint", filename="checkpoint.pth.tar"):
         filepath = os.path.join(folder, filename)
         if not os.path.exists(filepath):
-            raise FileNotFoundError("No model in path {}".format(filepath))
+            raise FileNotFoundError(f"No model in path {filepath}")
         map_location = torch.device("cuda" if self.args.cuda else "cpu")
-        checkpoint = torch.load(filepath, map_location=map_location)
-        self.nnet.load_state_dict(checkpoint["state_dict"])
+        checkpoint = torch.load(filepath, map_location=map_location, weights_only=True)
+        self.nnet.load_state_dict(checkpoint)

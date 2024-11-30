@@ -7,6 +7,8 @@ from TSP.TSPGame import TSPGame as Game
 from TSP.pytorch.NNetWrapper import NNetWrapper as neural_net_wrapper
 from Coach import Coach
 from utils import *
+import os
+
 
 log = logging.getLogger(__name__)
 
@@ -14,7 +16,7 @@ coloredlogs.install(level="INFO")
 
 args = dotdict(
     {
-        "numIters": 1000,
+        "numIters": 8, #1000
         "numEps": 2, #100
         "tempThreshold": 15,
         "maxlenOfQueue": 200000,
@@ -25,12 +27,11 @@ args = dotdict(
         "load_folder_file": ("./temp", "best.pth.tar"),
         "numItersForTrainExamplesHistory": 20,
         "maxSteps": 50,  # Maximum steps per episode
-        "numEpsEval": 20,  # Number of episodes for evaluation
+        "numEpsEval": 2,  # Number of episodes for evaluation #20
         "updateThreshold": 0.01,  # Minimum improvement threshold (e.g., 1%)
 
         # New updates from ChatGTP
         "maxDepth": 50,
-        "updateThreshold": 0.6,  # can be removed?
         "arenaCompare": 40,  # can be removed?
 
         # For neural Network
@@ -41,22 +42,46 @@ args = dotdict(
         "cuda": torch.cuda.is_available(),
         "num_channels": 128,
         "max_gradient_norm": 5.0,  # Optional: For gradient clipping
+
+        'visualize': True,  # Set to False to disable plotting
+
+        'read_from_file': True,
+        'file_name': 'tsplib/burma14.tsp',
+        'num_nodes': 6, # For random nodes generation
+
+        'num_processes': 4,  # Adjust based on your CPU cores
     }
 )
-
 
 def main():
     log.info("CUDA Available: %s", torch.cuda.is_available())
 
-    # Define node coordinates for TSP
-    num_nodes = 6  # Adjust the number of nodes as needed
-    node_coords = np.random.rand(num_nodes, 2).tolist()  # List of (x, y) tuples
+    if args.read_from_file:
+        node_coords = read_tsplib(args.file_name)
+        num_nodes = len(node_coords)
+
+        solutions_file = 'tsplib/solutions'  # Adjust the path as needed
+        best_solutions = read_solutions(solutions_file)
+
+        problem_name = os.path.splitext(os.path.basename(args.file_name))[0]
+
+        # Get the best known tour length
+        best_tour_length = best_solutions.get(problem_name, None)
+        if best_tour_length is None:
+            log.info(f"No best known solution found for {problem_name}.")
+        else:
+            log.info(f"Best known tour length for {problem_name}: {best_tour_length}")
+
+    else:
+        # Define node coordinates for TSP
+        num_nodes = args.num_nodes  # Adjust the number of nodes as needed
+        node_coords = np.random.rand(num_nodes, 2).tolist()  # List of (x, y) tuples
 
     log.info("Initializing %s...", Game.__name__)
-    g = Game(num_nodes, node_coords)  # Initialize TSP game with node coordinates
+    game = Game(num_nodes, node_coords)  # Initialize TSP game with node coordinates
 
     log.info("Initializing Neural Network: %s...", neural_net_wrapper.__name__)
-    nnet = neural_net_wrapper(g, args)
+    nnet = neural_net_wrapper(game, args)
 
     if args.load_model:
         log.info(
@@ -69,7 +94,7 @@ def main():
         log.warning("Not loading a checkpoint! Starting from scratch.")
 
     log.info("Initializing the Coach...")
-    c = Coach(g, nnet, args)
+    c = Coach(game, nnet, args, best_tour_length=best_tour_length)
 
     if args.load_model:
         log.info("Loading training examples from file...")

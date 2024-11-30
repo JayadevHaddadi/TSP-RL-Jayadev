@@ -1,6 +1,7 @@
 import sys
 import copy
 import numpy as np
+import matplotlib.pyplot as plt
 
 sys.path.append("..")
 from .TSPState import TSPState
@@ -179,6 +180,24 @@ class TSPGame:
         # Compute and display the tour length
         length = tsp_state.get_tour_length()
         print("Tour Length:", length)
+
+    def plotTour(self, tsp_state, title="Tour", save_path=None):
+        import matplotlib.pyplot as plt
+
+        coords = np.array(self.node_coordinates)
+        tour = tsp_state.tour + [tsp_state.tour[0]]
+
+        plt.figure()
+        plt.plot(coords[tour, 0], coords[tour, 1], 'o-', markersize=10)
+        plt.title(title)
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.grid(True)
+        if save_path:
+            plt.savefig(save_path)
+            plt.close()
+        else:
+            plt.show()
 
     def action_index_to_edges(self, action_index):
         """

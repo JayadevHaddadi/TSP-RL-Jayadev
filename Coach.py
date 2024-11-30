@@ -12,6 +12,10 @@ from TSP.pytorch.NNetWrapper import NNetWrapper
 
 from TSP.TSPGame import TSPGame
 
+import matplotlib.pyplot as plt
+
+import multiprocessing as mp
+
 log = logging.getLogger(__name__)
 
 
@@ -21,7 +25,7 @@ class Coach:
     in Game and NeuralNet. args are specified in main.py.
     """
 
-    def __init__(self, game: TSPGame, nnet: NNetWrapper, args):
+    def __init__(self, game: TSPGame, nnet: NNetWrapper, args, best_tour_length=None):
         self.game = game
         self.nnet = nnet
         self.pnet = nnet.__class__(game, args)  # Initialize the previous network
@@ -29,7 +33,7 @@ class Coach:
         self.mcts = MCTS(self.game, self.nnet, self.args)
         self.trainExamplesHistory = []
         self.skipFirstSelfPlay = False
-
+        self.best_tour_length = best_tour_length
 
     def executeEpisode(self):
         """
@@ -68,13 +72,23 @@ class Coach:
         # Assign the value to all examples
         return [(x[0], x[1], value) for x in trainExamples]
 
+    def executeEpisodeWrapper(self, _):
+        self.mcts = MCTS(
+            self.game, self.nnet, self.args
+        )  # Each process needs its own MCTS
+        return self.executeEpisode()
 
     def learn(self):
+        avg_lengths_new = []
+        avg_lengths_old = []
         for i in range(1, self.args.numIters + 1):
             log.info(f"Starting Iter #{i} ...")
-
             iterationTrainExamples = []
 
+            # with mp.Pool(processes=self.args.num_processes) as pool:
+            #     results = pool.map(self.executeEpisodeWrapper, range(self.args.numEps))
+            #     for e in results:
+            #         iterationTrainExamples.extend(e)
             for _ in tqdm(range(self.args.numEps), desc="Self Play"):
                 self.mcts = MCTS(self.game, self.nnet, self.args)  # Reset search tree
                 iterationTrainExamples.extend(self.executeEpisode())
@@ -82,7 +96,10 @@ class Coach:
             # Save the iteration examples to the history
             self.trainExamplesHistory.append(iterationTrainExamples)
 
-            if len(self.trainExamplesHistory) > self.args.numItersForTrainExamplesHistory:
+            if (
+                len(self.trainExamplesHistory)
+                > self.args.numItersForTrainExamplesHistory
+            ):
                 log.warning(f"Removing the oldest entry in trainExamplesHistory.")
                 self.trainExamplesHistory.pop(0)
 
@@ -96,8 +113,12 @@ class Coach:
             shuffle(trainExamples)
 
             # Training new network, keeping a copy of the old one
-            self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
-            self.pnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
+            self.nnet.save_checkpoint(
+                folder=self.args.checkpoint, filename="temp.pth.tar"
+            )
+            self.pnet.load_checkpoint(
+                folder=self.args.checkpoint, filename="temp.pth.tar"
+            )
             pmcts = MCTS(self.game, self.pnet, self.args)
 
             self.nnet.train(trainExamples)
@@ -108,24 +129,64 @@ class Coach:
             avg_length_old = self.evaluateNetwork(pmcts)
             avg_length_new = self.evaluateNetwork(nmcts)
 
-            log.info(f"Average Tour Length - New: {avg_length_new}, Old: {avg_length_old}")
+            # Store the average lengths for plotting
+            avg_lengths_old.append(avg_length_old)
+            avg_lengths_new.append(avg_length_new)
+
+            log.info(
+                f"Average Tour Length - New: {avg_length_new}, Old: {avg_length_old}"
+            )
 
             if avg_length_new < avg_length_old * (1 - self.args.updateThreshold):
                 log.info("ACCEPTING NEW MODEL")
-                self.nnet.save_checkpoint(folder=self.args.checkpoint, filename=self.getCheckpointFile(i))
-                self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='best.pth.tar')
+                self.nnet.save_checkpoint(
+                    folder=self.args.checkpoint, filename=self.getCheckpointFile(i)
+                )
+                self.nnet.save_checkpoint(
+                    folder=self.args.checkpoint, filename="best.pth.tar"
+                )
             else:
                 log.info("REJECTING NEW MODEL")
-                self.nnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
+                self.nnet.load_checkpoint(
+                    folder=self.args.checkpoint, filename="temp.pth.tar"
+                )
+            # After training is complete, print the tour lengths
 
+            # Generate a tour using the new network
+            board = self.game.getInitBoard()
+            for _ in range(self.args.maxSteps):
+                canonicalBoard = self.game.getCanonicalForm(board)
+                pi = self.mcts.getActionProb(canonicalBoard, temp=0)
+                action = np.argmax(pi)
+                board = self.game.getNextState(board, action)
+
+            # Plot the tour
+            if self.args.visualize:
+                title = f"Iteration {i} - New Network Tour"
+                save_path = f"tours/iteration_{i}_tour.png"
+                self.game.plotTour(board, title=title, save_path=save_path)
+
+        print("Average Tour Lengths per Iteration:")
+        for iteration, (old_len, new_len) in enumerate(
+            zip(avg_lengths_old, avg_lengths_new), 1
+        ):
+            print(
+                f"Iteration {iteration}: Old Avg Length = {old_len}, New Avg Length = {new_len}"
+            )
+        if self.args.visualize:
+            iterations = range(1, self.args.numIters + 1)
+            plt.plot(iterations, avg_lengths_old, label="Old Network")
+            plt.plot(iterations, avg_lengths_new, label="New Network")
+            plt.xlabel("Iteration")
+            plt.ylabel("Average Tour Length")
+            plt.title("Average Tour Lengths Over Iterations")
+            plt.legend()
+            plt.grid(True)
+            plt.show()
 
     def evaluateNetwork(self, mcts):
-        """
-        Evaluates the network by running it over a number of episodes and computing
-        the average tour length.
-        """
         total_length = 0
-        num_episodes = self.args.numEpsEval  # Define this in your arguments
+        num_episodes = self.args.numEpsEval
         for _ in range(num_episodes):
             board = self.game.getInitBoard()
             for _ in range(self.args.maxSteps):
@@ -135,8 +196,18 @@ class Coach:
                 board = self.game.getNextState(board, action)
             total_length += self.game.getTourLength(board)
         avg_length = total_length / num_episodes
-        return avg_length
 
+        # Compare with best known solution if available
+        best_tour_length = self.best_tour_length  # Store this in the Coach class
+        if best_tour_length is not None:
+            log.info(f"Best Known Tour Length: {best_tour_length}")
+            log.info(f"Average Tour Length: {avg_length}")
+            improvement = ((avg_length - best_tour_length) / best_tour_length) * 100
+            log.info(f"Percentage above best known: {improvement:.2f}%")
+        else:
+            log.info(f"Average Tour Length: {avg_length}")
+
+        return avg_length
 
     def getCheckpointFile(self, iteration):
         return "checkpoint_" + str(iteration) + ".pth.tar"
@@ -152,7 +223,8 @@ class Coach:
 
     def loadTrainExamples(self):
         modelFile = os.path.join(
-            self.args.load_examples_folder_file[0], self.args.load_examples_folder_file[1]
+            self.args.load_examples_folder_file[0],
+            self.args.load_examples_folder_file[1],
         )
         examplesFile = modelFile + ".examples"
         if not os.path.isfile(examplesFile):

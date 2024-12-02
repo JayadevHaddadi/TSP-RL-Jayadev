@@ -151,10 +151,10 @@ class NNetWrapper(NeuralNet):
 
     def predict(self, tsp_state):
         """
-        Predicts the policy and value for the given board.
+        Predicts the policy and value for the given tsp_state.
 
         Args:
-            board: TSPState instance representing the current state.
+            tsp_state: TSPState instance representing the current state.
 
         Returns:
             pi: numpy array of shape [action_size], policy probabilities

@@ -59,8 +59,8 @@ class Coach:
 
             # Apply data augmentation by rearranging node and tour order
             symmetries = self.game.getSymmetries(tsp_state, pi)
-            for b, p in symmetries:
-                trainExamples.append([b, p, None])
+            for state, pi in symmetries:
+                trainExamples.append([state, pi, None])
 
             action = np.random.choice(len(pi), p=pi)
             tsp_state = self.game.getNextState(tsp_state, action)

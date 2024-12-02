@@ -95,8 +95,8 @@ class NNetWrapper(NeuralNet):
             if batch_count == 0:
                 batch_count = 1  # Ensure at least one batch
 
-            t = tqdm(range(batch_count), desc="Training Net")
-            for i in t:
+            batches = tqdm(range(batch_count), desc="Training Net")
+            for i in batches:
                 sample_ids = np.arange(
                     i * self.args.batch_size,
                     min((i + 1) * self.args.batch_size, len(examples)),
@@ -138,7 +138,7 @@ class NNetWrapper(NeuralNet):
                 # Record losses
                 pi_losses.update(l_pi.item(), node_features.size(0))
                 v_losses.update(l_v.item(), node_features.size(0))
-                t.set_postfix(Loss_pi=pi_losses.avg, Loss_v=v_losses.avg)
+                batches.set_postfix(Loss_pi=pi_losses.avg, Loss_v=v_losses.avg)
 
                 # Backpropagation and optimization step
                 optimizer.zero_grad()

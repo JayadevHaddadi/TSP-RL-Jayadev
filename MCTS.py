@@ -17,7 +17,7 @@ class MCTS:
 
     def __init__(self, game: TSPGame, nnet: NNetWrapper, args):
         self.game = game
-        self.nnet = nnet
+        self.nnetWrapper = nnet
         self.args = args
         self.Q_state_action = {}  # Stores Q values for state-action pairs
         self.Visits_state_action = {}  # Stores visit counts for state-action pairs
@@ -70,7 +70,7 @@ class MCTS:
         if stateKey in visited:
             # Cycle detected
             # print("Cycle detected at state:", stateKey)
-            _, v = self.nnet.predict(state)
+            _, v = self.nnetWrapper.predict(state)
             visited.discard(stateKey)
             return v
 
@@ -79,13 +79,13 @@ class MCTS:
         MAX_DEPTH = self.args.maxDepth
         if depth >= MAX_DEPTH:
             # Depth limit reached
-            _, v = self.nnet.predict(state)
+            _, v = self.nnetWrapper.predict(state)
             visited.discard(stateKey)
             return v
 
         if stateKey not in self.Policy_state:
             # Leaf node: expand and evaluate
-            self.Policy_state[stateKey], v = self.nnet.predict(state)
+            self.Policy_state[stateKey], v = self.nnetWrapper.predict(state)
             valids = self.game.getValidMoves(state)
             self.Policy_state[stateKey] = self.Policy_state[stateKey] * valids  # Mask invalid moves
             sum_Ps_s = np.sum(self.Policy_state[stateKey])

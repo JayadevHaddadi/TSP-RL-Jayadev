@@ -16,8 +16,8 @@ coloredlogs.install(level="INFO")
 
 args = dotdict(
     {
-        "numIters": 8, #1000
-        "numEps": 2, #100
+        "numIters": 1000, #1000
+        "numEps": 10, #100
         "tempThreshold": 15,
         "maxlenOfQueue": 200000,
         "numMCTSSims": 25,  # 25 original value
@@ -27,7 +27,7 @@ args = dotdict(
         "load_folder_file": ("./temp", "best.pth.tar"),
         "numItersForTrainExamplesHistory": 20,
         "maxSteps": 50,  # Maximum steps per episode
-        "numEpsEval": 2,  # Number of episodes for evaluation #20
+        "numEpsEval": 3,  # Number of episodes for evaluation #20
         "updateThreshold": 0.01,  # Minimum improvement threshold (e.g., 1%)
 
         # New updates from ChatGTP

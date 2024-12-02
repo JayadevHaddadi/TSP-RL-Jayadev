@@ -36,20 +36,12 @@ class Coach:
         self.best_tour_length = best_tour_length
 
     def executeEpisode(self):
-        """
-        This function executes one episode of self-play.
-        As the game is played, each move is added as a training example to
-        trainExamples. The game is played until a maximum number of steps is reached.
-        After the episode ends, the final tour length is used to assign values to each example.
-        Returns:
-            trainExamples: a list of examples of the form (board, pi, v)
-                        pi is the MCTS-informed policy vector, v is the negative tour length.
-        """
         trainExamples = []
         tsp_state = self.game.getInitBoard()
+        initial_tour_length = self.game.getTourLength(tsp_state)
         episodeStep = 0
 
-        maxSteps = self.args.maxSteps  # Define this in your arguments
+        maxSteps = self.args.maxSteps
 
         while episodeStep < maxSteps:
             episodeStep += 1
@@ -67,10 +59,15 @@ class Coach:
 
         # After the episode ends, compute the final tour length
         final_tour_length = self.game.getTourLength(tsp_state)
-        value = -final_tour_length  # Negative tour length as value to minimize
+
+        # Compute the value as the percentage improvement over initial tour length
+        value = (initial_tour_length - final_tour_length) / (initial_tour_length + 1e-8)
+        # Cap the value between -1 and 1
+        value = np.clip(value, -1, 1)
 
         # Assign the value to all examples
         return [(x[0], x[1], value) for x in trainExamples]
+
 
     def executeEpisodeWrapper(self, _):
         self.mcts = MCTS(
@@ -184,10 +181,10 @@ class Coach:
             plt.grid(True)
             plt.show()
 
-    def evaluateNetwork(self, mcts):
+    def evaluateNetwork(self, mcts, name = ""):
         total_length = 0
         num_episodes = self.args.numEpsEval
-        for _ in range(num_episodes):
+        for _ in tqdm(range(num_episodes),desc="Evluationg " + name + " network"): #tqdm(range(self.args.numEps), desc="Self Play")
             board = self.game.getInitBoard()
             for _ in range(self.args.maxSteps):
                 canonicalBoard = self.game.getCanonicalForm(board)

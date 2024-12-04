@@ -36,8 +36,7 @@ class TSPNNet(nn.Module):
         node_features: tensor of shape [batch_size, num_nodes, node_feature_size]
         adjacency_matrix: tensor of shape [batch_size, num_nodes, num_nodes]
         """
-        batch_size = node_features.size(0)
-
+        
         # First graph convolutional layer
         x = self.graph_conv(node_features, adjacency_matrix, self.gc1)
         x = F.relu(x)

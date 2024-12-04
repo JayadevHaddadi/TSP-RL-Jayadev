@@ -58,19 +58,16 @@ class MCTS:
         probs = [x / counts_sum for x in counts_exp]
         return probs
 
-    ending_count = 0
-    predict_count = 0
-
-    def search(self, state: TSPState, depth=0, visited=None):
+    def search(self, tsp_state: TSPState, depth=0, visited=None):
         if visited is None:
             visited = set()
 
-        stateKey = self.game.uniqueStringRepresentation(state)
+        stateKey = self.game.uniqueStringRepresentation(tsp_state)
 
         if stateKey in visited:
             # Cycle detected
             # print("Cycle detected at state:", stateKey)
-            _, v = self.nnetWrapper.predict(state)
+            _, v = self.nnetWrapper.predict(tsp_state)
             visited.discard(stateKey)
             return v
 
@@ -79,14 +76,14 @@ class MCTS:
         MAX_DEPTH = self.args.maxDepth
         if depth >= MAX_DEPTH:
             # Depth limit reached
-            _, v = self.nnetWrapper.predict(state)
+            _, v = self.nnetWrapper.predict(tsp_state)
             visited.discard(stateKey)
             return v
 
         if stateKey not in self.Policy_state:
             # Leaf node: expand and evaluate
-            self.Policy_state[stateKey], v = self.nnetWrapper.predict(state)
-            valids = self.game.getValidMoves(state)
+            self.Policy_state[stateKey], v = self.nnetWrapper.predict(tsp_state)
+            valids = self.game.getValidMoves(tsp_state)
             self.Policy_state[stateKey] = self.Policy_state[stateKey] * valids  # Mask invalid moves
             sum_Ps_s = np.sum(self.Policy_state[stateKey])
             if sum_Ps_s > 0:
@@ -135,8 +132,7 @@ class MCTS:
             return 0  # Or an appropriate heuristic value
 
         action = best_act
-        next_s = self.game.getNextState(state, action)
-        next_s = self.game.getCanonicalForm(next_s)
+        next_s = self.game.getNextState(tsp_state, action)
         v = self.search(next_s, depth + 1, visited)
 
         # Update Qsa, Nsa values

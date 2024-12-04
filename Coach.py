@@ -66,14 +66,7 @@ class Coach:
         value = np.clip(value, -1, 1)
 
         # Assign the value to all examples
-        return [(x[0], x[1], value) for x in trainExamples]
-
-
-    def executeEpisodeWrapper(self, _):
-        self.mcts = MCTS(
-            self.game, self.nnet, self.args
-        )  # Each process needs its own MCTS
-        return self.executeEpisode()
+        return [(state_pi[0], state_pi[1], value) for state_pi in trainExamples]
 
     def learn(self):
         avg_lengths_new = []

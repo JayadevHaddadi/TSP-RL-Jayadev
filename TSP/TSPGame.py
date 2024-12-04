@@ -57,9 +57,6 @@ class TSPGame:
         next_state = copy.deepcopy(tsp_state)
         # Execute the action on the copied state
         next_state.execute_action(action)
-        # Convert to canonical form
-        canonical_tour = next_state.get_canonical_tour()
-        next_state.set_state(canonical_tour)
         return next_state
 
     def getValidMoves(self, tsp_state):

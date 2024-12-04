@@ -103,12 +103,12 @@ class NNetWrapper(NeuralNet):
                 )
                 batch_examples = [examples[j] for j in sample_ids]
 
-                boards, target_pis, target_vs = zip(*batch_examples)
+                tsp_state, target_pis, target_vs = zip(*batch_examples)
 
                 # Prepare input features and adjacency matrices
                 node_features_list = []
                 adjacency_matrices_list = []
-                for board in boards:
+                for board in tsp_state:
                     node_features, adjacency_matrix = self.prepare_input(board)
                     node_features_list.append(node_features)
                     adjacency_matrices_list.append(adjacency_matrix)

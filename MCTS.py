@@ -138,13 +138,19 @@ class MCTS:
         # Update Qsa, Nsa values
         sa = (stateKey, action)
         if sa in self.Q_state_action:
-            self.Q_state_action[sa] = (
-                self.Visits_state_action[sa] * self.Q_state_action[sa] + v
-            ) / (self.Visits_state_action[sa] + 1)
+            self.Q_state_action[sa] = (self.Visits_state_action[sa] * self.Q_state_action[sa] + v) / (self.Visits_state_action[sa] + 1)
             self.Visits_state_action[sa] += 1
         else:
             self.Q_state_action[sa] = v
             self.Visits_state_action[sa] = 1
+
+        # # In MCTS search method
+        # if (stateKey, action) in self.Q_state_action:
+        #     u = (self.Q_state_action[(stateKey, action)] + 
+        #          self.args.cpuct * self.Policy_state[stateKey][action] * math.sqrt(self.Visits_state[stateKey]) / 
+        #          (1 + self.Visits_state_action[(stateKey, action)]))
+        # else:
+        #     u = self.args.cpuct * self.Policy_state[stateKey][action] * math.sqrt(self.Visits_state[stateKey] + EPS)
 
         self.Visits_state[stateKey] += 1
         visited.discard(stateKey)

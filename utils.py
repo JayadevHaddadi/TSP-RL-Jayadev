@@ -1,5 +1,10 @@
 import numpy as np
 
+import os
+
+if not os.path.exists('tours'):
+    os.makedirs('tours')
+
 class AverageMeter(object):
     """From https://github.com/pytorch/examples/blob/master/imagenet/main.py"""
 
@@ -69,7 +74,17 @@ def read_solutions(filename):
                     pass
     return solutions
 
-import os
-
-if not os.path.exists('tours'):
-    os.makedirs('tours')
+def write_tsplib(filename, node_coordinates):
+    """
+    Writes node coordinates to a TSPLIB format file.
+    """
+    num_nodes = len(node_coordinates)
+    with open(filename, "w") as f:
+        f.write("NAME: Random_TSP\n")
+        f.write("TYPE: TSP\n")
+        f.write(f"DIMENSION: {num_nodes}\n")
+        f.write("EDGE_WEIGHT_TYPE: EUC_2D\n")
+        f.write("NODE_COORD_SECTION\n")
+        for i, (x, y) in enumerate(node_coordinates, start=1):
+            f.write(f"{i} {x} {y}\n")
+        f.write("EOF\n")

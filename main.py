@@ -1,153 +1,177 @@
 import logging
-import coloredlogs
+import os
+import sys
+from datetime import datetime
+
 import torch
 import numpy as np
-from datetime import datetime
-import os
 
 from TSP.TSPGame import TSPGame as Game
 from TSP.pytorch.NNetWrapper import NNetWrapper as neural_net_wrapper
 from Coach import Coach
 from utils import *
 
-log = logging.getLogger(__name__)
-
-coloredlogs.install(level="INFO")
-
-args = dotdict(
-    {
-        "numIters": 1000,
-        "numEps": 2, #100
-        "tempThreshold": 15,
-        "maxlenOfQueue": 200000,
-        "numMCTSSims": 25,
-        "cpuct": 1,
-        "checkpoint": "./temp/",
-        "load_model": False,
-        "load_folder_file": ("./temp", "best.pth.tar"),
-        "numItersForTrainExamplesHistory": 20,
-        "maxSteps": 50,
-        "numEpsEval": 2,
-        "updateThreshold": 0.01,
-        "maxDepth": 50,
-        "lr": 0.001,
-        "dropout": 0.3,
-        "epochs": 2, #10
-        "batch_size": 64,
-        "cuda": torch.cuda.is_available(),
-        "num_channels": 128,
-        "max_gradient_norm": 5.0,
-        "visualize": True,
-        "read_from_file": False,
-        "file_name": "tsplib/burma14.tsp",
-        "num_nodes": 6,
-    }
-)
-
-
-def setup_run_directory():
+def save_node_coordinates(node_coords, filename):
     """
-    Create a unique directory for the current run inside 'runs' folder.
-    Includes subfolders for graphs, neural nets, and logs.
+    Saves node coordinates to a file in the TSPLIB format.
     """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"{args.num_nodes}_nodes_"
-    run_name += (
-        "random_"
-        if not args.read_from_file
-        else f"from_{args.file_name.split('/')[-1]}_"
-    )
-    run_name += timestamp
-
-    base_path = os.path.join("runs", run_name)
-    os.makedirs(base_path, exist_ok=True)
-
-    subfolders = ["graphs", "neural_net"]
-    for subfolder in subfolders:
-        os.makedirs(os.path.join(base_path, subfolder), exist_ok=True)
-
-    log_file = os.path.join(base_path, "output.log")
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
-    log.addHandler(file_handler)
-
-    return base_path
-
-
-def save_initial_data(base_path, node_coords, best_tour_length=None):
-    """
-    Save initial data like node coordinates and best known solution to a file.
-    """
-    coords_file = os.path.join(base_path, "node_coordinates.tsp")
-    with open(coords_file, "w") as f:
+    with open(filename, 'w') as f:
+        f.write("NAME: Generated\n")
+        f.write("TYPE: TSP\n")
+        f.write("DIMENSION: {}\n".format(len(node_coords)))
         f.write("NODE_COORD_SECTION\n")
-        for i, (x, y) in enumerate(node_coords, start=1):
-            f.write(f"{i} {x:.6f} {y:.6f}\n")
+        for idx, (x, y) in enumerate(node_coords, start=1):
+            f.write(f"{idx} {x} {y}\n")
         f.write("EOF\n")
 
-    if best_tour_length is not None:
-        with open(os.path.join(base_path, "best_tour_length.txt"), "w") as f:
-            f.write(f"Best Known Tour Length: {best_tour_length}\n")
+def setup_logging(log_file_path):
+    """
+    Sets up logging to write both to console and a log file.
+    """
+    # Get the root logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
 
+    # Remove existing handlers
+    while logger.handlers:
+        logger.handlers.pop()
+
+    # Formatter
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+    # File handler
+    file_handler = logging.FileHandler(log_file_path)
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
 
 def main():
-    log.info("CUDA Available: %s", torch.cuda.is_available())
+    args = dotdict(
+        {
+            "numIters": 1000,
+            "numEps": 10,
+            "tempThreshold": 15,
+            "maxlenOfQueue": 200000,
+            "numMCTSSims": 25,
+            "cpuct": 1,
+            "checkpoint": "./temp/",  # Will be updated later
+            "load_model": False,
+            "load_folder_file": ("./temp", "best.pth.tar"),
+            "numItersForTrainExamplesHistory": 20,
+            "maxSteps": 50,
+            "numEpsEval": 2,
+            "updateThreshold": 0.01,
 
-    # Setup directory structure for the current run
-    base_path = setup_run_directory()
+            # New updates
+            "maxDepth": 50,
 
+            # Neural Network parameters
+            "lr": 0.001,
+            "dropout": 0.3,
+            "epochs": 10,
+            "batch_size": 64,
+            "cuda": torch.cuda.is_available(),
+            "num_channels": 128,
+            "max_gradient_norm": 5.0,
+
+            'visualize': True,
+
+            'read_from_file': False,
+            'file_name': 'tsplib/burma14.tsp',
+            'num_nodes': 6,
+        }
+    )
+
+    # Set up run timestamp
+    run_timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+
+    # Determine node coordinates and node count
     if args.read_from_file:
         node_coords = read_tsplib(args.file_name)
         num_nodes = len(node_coords)
+        node_type = os.path.splitext(os.path.basename(args.file_name))[0]  # e.g., 'burma14'
+    else:
+        # Define node coordinates for TSP
+        num_nodes = args.num_nodes
+        node_coords = np.random.rand(num_nodes, 2).tolist()  # List of (x, y) tuples
+        node_type = 'random'
 
-        solutions_file = "tsplib/solutions"
+    # Construct run folder name
+    run_name = f"{num_nodes}_nodes_{node_type}_{run_timestamp}"
+    run_folder = os.path.join('runs', run_name)
+    os.makedirs(run_folder, exist_ok=True)
+
+    # Create subfolders
+    graphs_folder = os.path.join(run_folder, 'graphs')
+    os.makedirs(graphs_folder, exist_ok=True)
+
+    nn_folder = os.path.join(run_folder, 'checkpoints')
+    os.makedirs(nn_folder, exist_ok=True)
+
+    # Update args.checkpoint to point to nn_folder
+    args.checkpoint = nn_folder
+
+    # Set up logging
+    log_file = os.path.join(run_folder, 'log.txt')
+    setup_logging(log_file)
+
+    # Now proceed with the rest of the main function
+    logging.info("CUDA Available: %s", torch.cuda.is_available())
+    logging.info(f"Run folder: {run_folder}")
+
+    # Save node coordinates to a file in the run folder
+    node_coords_file = os.path.join(run_folder, 'node_coordinates.txt')
+    save_node_coordinates(node_coords, node_coords_file)
+
+    # Now, if reading from file, get the best known solution
+    if args.read_from_file:
+        solutions_file = 'tsplib/solutions'  # Adjust the path as needed
         best_solutions = read_solutions(solutions_file)
 
         problem_name = os.path.splitext(os.path.basename(args.file_name))[0]
+
+        # Get the best known tour length
         best_tour_length = best_solutions.get(problem_name, None)
         if best_tour_length is None:
-            log.info(f"No best known solution found for {problem_name}.")
+            logging.info(f"No best known solution found for {problem_name}.")
         else:
-            log.info(f"Best known tour length for {problem_name}: {best_tour_length}")
-
+            logging.info(f"Best known tour length for {problem_name}: {best_tour_length}")
     else:
-        num_nodes = args.num_nodes
-        node_coords = np.random.rand(num_nodes, 2).tolist()
-        best_tour_length = None
+        best_tour_length = None  # Or set to a large value
 
-    log.info("Initializing %s...", Game.__name__)
-    game = Game(num_nodes, node_coords)
+    logging.info("Initializing %s...", Game.__name__)
+    game = Game(num_nodes, node_coords)  # Initialize TSP game with node coordinates
+    game.node_type = node_type  # Add node_type attribute to game
+    game.num_nodes = num_nodes
 
-    log.info("Initializing Neural Network: %s...", neural_net_wrapper.__name__)
+    logging.info("Initializing Neural Network: %s...", neural_net_wrapper.__name__)
     nnet = neural_net_wrapper(game, args)
 
     if args.load_model:
-        log.info(
+        logging.info(
             'Loading checkpoint "%s/%s"...',
             args.load_folder_file[0],
             args.load_folder_file[1],
         )
         nnet.load_checkpoint(args.load_folder_file[0], args.load_folder_file[1])
     else:
-        log.warning("Not loading a checkpoint! Starting from scratch.")
+        logging.warning("Not loading a checkpoint! Starting from scratch.")
 
-    log.info("Initializing the Coach...")
-    c = Coach(game, nnet, args, best_tour_length=best_tour_length)
+    logging.info("Initializing the Coach...")
+    c = Coach(game, nnet, args, best_tour_length=best_tour_length, graphs_folder=graphs_folder)
 
     if args.load_model:
-        log.info("Loading training examples from file...")
+        logging.info("Loading training examples from file...")
         c.loadTrainExamples()
 
-    # Save initial data
-    save_initial_data(base_path, node_coords, best_tour_length)
-
-    # Set paths for graphs and neural net outputs
-    c.graphs_folder = os.path.join(base_path, "graphs")
-    c.nn_folder = os.path.join(base_path, "neural_net")
-
-    log.info("Starting the learning process 🎉")
+    logging.info("Starting the learning process 🎉")
     c.learn()
-
 
 if __name__ == "__main__":
     main()

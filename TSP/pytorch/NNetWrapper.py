@@ -1,6 +1,5 @@
 import os
 import sys
-import time
 
 import numpy as np
 from tqdm import tqdm
@@ -81,6 +80,8 @@ class NNetWrapper(NeuralNet):
         examples: list of examples, each example is of form (board, pi, v)
         """
         optimizer = optim.Adam(self.nnet.parameters(), lr=self.args.lr)
+        pi_losses_history = []
+        v_losses_history = []
 
         for epoch in range(self.args.epochs):
             print("EPOCH ::: " + str(epoch + 1))
@@ -116,10 +117,10 @@ class NNetWrapper(NeuralNet):
                 # Stack inputs to create batch tensors
                 node_features = torch.stack(
                     node_features_list
-                )  # Shape: [batch_size, num_nodes, node_feature_size]
+                )
                 adjacency_matrices = torch.stack(
                     adjacency_matrices_list
-                )  # Shape: [batch_size, num_nodes, num_nodes]
+                )
 
                 target_pis = torch.FloatTensor(np.array(target_pis))
                 target_vs = torch.FloatTensor(np.array(target_vs).astype(np.float32))
@@ -140,6 +141,10 @@ class NNetWrapper(NeuralNet):
                 v_losses.update(l_v.item(), node_features.size(0))
                 batches.set_postfix(Loss_pi=pi_losses.avg, Loss_v=v_losses.avg)
 
+                # Append losses to history
+                pi_losses_history.append(l_pi.item())
+                v_losses_history.append(l_v.item())
+
                 # Backpropagation and optimization step
                 optimizer.zero_grad()
                 total_loss.backward()
@@ -148,6 +153,9 @@ class NNetWrapper(NeuralNet):
                     self.nnet.parameters(), self.args.max_gradient_norm
                 )
                 optimizer.step()
+
+        return {'pi_losses': pi_losses_history, 'v_losses': v_losses_history}
+
 
     def predict(self, tsp_state):
         """

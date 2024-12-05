@@ -15,7 +15,6 @@ class TSPState:
         self.tour = []  # Current tour (list of node indices)
         self.max_no_improve = 10  # Stopping criterion (can be adjusted)
         self.no_improve_counter = 0
-        self.best_length = float("inf")
         self.current_length = float("inf")
         self.reset_initial_state()
 
@@ -29,7 +28,6 @@ class TSPState:
         np.random.shuffle(self.tour)
         self.tour = self.get_canonical_tour()
         self.current_length = self.get_tour_length()
-        self.best_length = self.current_length
 
     def set_state(self, tour):
         """

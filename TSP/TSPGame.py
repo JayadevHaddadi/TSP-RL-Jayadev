@@ -18,18 +18,18 @@ class TSPGame:
         """
         self.num_nodes = num_nodes
         self.node_coordinates = node_coordinates
+        self.node_type = None  # Will be set in main.py
 
         # Precalculate the valid moves vector (all moves are valid)
         self.valid_moves = np.ones(self.getActionSize(), dtype=int)
 
-    def getInitBoard(self):
+    def getInitState(self):
         """
         Return the initial TSP state.
 
         For TSP, this could be a random tour or a fixed starting point.
         """
         tsp_state = TSPState(self.num_nodes, self.node_coordinates)
-        tsp_state.reset_initial_state()
         return tsp_state
 
     def getBoardSize(self):
@@ -49,7 +49,7 @@ class TSPGame:
         """
         return (self.num_nodes * (self.num_nodes - 1)) // 2
 
-    def getNextState(self, tsp_state, action):
+    def getNextState(self,  tsp_state: TSPState, action):
         """
         Given the current state and action, return the next state.
         """
@@ -179,16 +179,14 @@ class TSPGame:
         print("Tour Length:", length)
 
     def plotTour(self, tsp_state, title="Tour", save_path=None):
-        import matplotlib.pyplot as plt
-
         coords = np.array(self.node_coordinates)
         tour = tsp_state.tour + [tsp_state.tour[0]]
 
         plt.figure()
-        plt.plot(coords[tour, 0], coords[tour, 1], 'o-', markersize=10)
+        plt.plot(coords[tour, 0], coords[tour, 1], "o-", markersize=10)
         plt.title(title)
-        plt.xlabel('X')
-        plt.ylabel('Y')
+        plt.xlabel("X")
+        plt.ylabel("Y")
         plt.grid(True)
         if save_path:
             plt.savefig(save_path)

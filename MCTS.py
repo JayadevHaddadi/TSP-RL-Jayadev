@@ -10,6 +10,7 @@ EPS = 1e-8
 log = logging.getLogger(__name__)
 
 
+
 class MCTS:
     """
     This class handles the MCTS tree for the Traveling Salesman Problem (TSP).

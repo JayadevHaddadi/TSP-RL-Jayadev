@@ -14,8 +14,6 @@ from TSP.TSPGame import TSPGame
 
 import matplotlib.pyplot as plt
 
-import multiprocessing as mp
-
 log = logging.getLogger(__name__)
 
 
@@ -25,7 +23,14 @@ class Coach:
     in Game and NeuralNet. args are specified in main.py.
     """
 
-    def __init__(self, game: TSPGame, nnet: NNetWrapper, args, best_tour_length=None):
+    def __init__(
+        self,
+        game: TSPGame,
+        nnet: NNetWrapper,
+        args,
+        best_tour_length=None,
+        graphs_folder=None,
+    ):
         self.game = game
         self.nnet = nnet
         self.pnet = nnet.__class__(game, args)  # Initialize the previous network
@@ -34,14 +39,23 @@ class Coach:
         self.trainExamplesHistory = []
         self.skipFirstSelfPlay = False
         self.best_tour_length = best_tour_length
+        self.graphs_folder = graphs_folder
 
     def executeEpisode(self):
+        """
+        This function executes one episode of self-play.
+        As the game is played, each move is added as a training example to
+        trainExamples. The game is played until a maximum number of steps is reached.
+        After the episode ends, the final tour length is used to assign values to each example.
+        Returns:
+            trainExamples: a list of examples of the form (board, pi, v)
+                        pi is the MCTS-informed policy vector, v is the negative tour length.
+        """
         trainExamples = []
-        tsp_state = self.game.getInitBoard()
-        initial_tour_length = self.game.getTourLength(tsp_state)
+        tsp_state = self.game.getInitState()
         episodeStep = 0
 
-        maxSteps = self.args.maxSteps
+        maxSteps = self.args.maxSteps  # Define this in your arguments
 
         while episodeStep < maxSteps:
             episodeStep += 1
@@ -58,6 +72,7 @@ class Coach:
             tsp_state = self.game.getNextState(tsp_state, action)
 
         # After the episode ends, compute the final tour length
+        initial_tour_length = self.game.getTourLength(self.game.getInitState())
         final_tour_length = self.game.getTourLength(tsp_state)
 
         # Compute the value as the percentage improvement over initial tour length
@@ -75,10 +90,6 @@ class Coach:
             log.info(f"Starting Iter #{i} ...")
             iterationTrainExamples = []
 
-            # with mp.Pool(processes=self.args.num_processes) as pool:
-            #     results = pool.map(self.executeEpisodeWrapper, range(self.args.numEps))
-            #     for e in results:
-            #         iterationTrainExamples.extend(e)
             for _ in tqdm(range(self.args.numEps), desc="Self Play"):
                 self.mcts = MCTS(self.game, self.nnet, self.args)  # Reset search tree
                 iterationTrainExamples.extend(self.executeEpisode())
@@ -111,60 +122,69 @@ class Coach:
             )
             pmcts = MCTS(self.game, self.pnet, self.args)
 
-            self.nnet.train(trainExamples)
+            train_losses = self.nnet.train(trainExamples)
             nmcts = MCTS(self.game, self.nnet, self.args)
+
+            # Save loss history to files
+            losses_file = os.path.join(self.graphs_folder, f"losses_iteration_{i}.npz")
+            np.savez(losses_file,
+                pi_losses=train_losses["pi_losses"],
+                v_losses=train_losses["v_losses"],)
 
             log.info("EVALUATING NEW NETWORK")
             # Evaluate the new network by comparing average tour lengths
-            avg_length_old = self.evaluateNetwork(pmcts)
-            avg_length_new = self.evaluateNetwork(nmcts)
+            avg_length_old = self.evaluateNetwork(pmcts, name="Old")
+            avg_length_new = self.evaluateNetwork(nmcts, name="New")
 
             # Store the average lengths for plotting
             avg_lengths_old.append(avg_length_old)
             avg_lengths_new.append(avg_length_new)
 
-            log.info(
-                f"Average Tour Length - New: {avg_length_new}, Old: {avg_length_old}"
-            )
+            log.info(f"Average Tour Length - New: {avg_length_new}, Old: {avg_length_old}")
 
             if avg_length_new < avg_length_old * (1 - self.args.updateThreshold):
                 log.info("ACCEPTING NEW MODEL")
-                self.nnet.save_checkpoint(
-                    folder=self.args.checkpoint, filename=self.getCheckpointFile(i)
-                )
-                self.nnet.save_checkpoint(
-                    folder=self.args.checkpoint, filename="best.pth.tar"
-                )
+                self.nnet.save_checkpoint(folder=self.args.checkpoint, filename=self.getCheckpointFile(i))
+                self.nnet.save_checkpoint(folder=self.args.checkpoint, filename="best.pth.tar")
             else:
                 log.info("REJECTING NEW MODEL")
-                self.nnet.load_checkpoint(
-                    folder=self.args.checkpoint, filename="temp.pth.tar"
-                )
+                self.nnet.load_checkpoint(folder=self.args.checkpoint, filename="temp.pth.tar")
             # After training is complete, print the tour lengths
 
             # Generate a tour using the new network
-            board = self.game.getInitBoard()
+            tsp_state = self.game.getInitState()
+            best_tsp_state = tsp_state
             for _ in range(self.args.maxSteps):
-                canonicalBoard = self.game.getCanonicalForm(board)
-                pi = self.mcts.getActionProb(canonicalBoard, temp=0)
+                pi = self.mcts.getActionProb(tsp_state, temp=0)
                 action = np.argmax(pi)
-                board = self.game.getNextState(board, action)
+                next_tsp_state = self.game.getNextState(tsp_state, action)
+                if next_tsp_state.current_length > best_tsp_state.current_length:
+                    best_tsp_state = next_tsp_state
+                tsp_state = next_tsp_state
 
             # Plot the tour
             if self.args.visualize:
                 title = f"Iteration {i} - New Network Tour"
-                save_path = f"tours/iteration_{i}_tour.png"
-                self.game.plotTour(board, title=title, save_path=save_path)
+                save_path = os.path.join(
+                    self.graphs_folder,
+                    f"{self.game.num_nodes}_nodes_{self.game.node_type}_iteration_{i}_tour.png",
+                )
+                self.game.plotTour(best_tsp_state, title=title, save_path=save_path)
 
         print("Average Tour Lengths per Iteration:")
-        for iteration, (old_len, new_len) in enumerate(
-            zip(avg_lengths_old, avg_lengths_new), 1
-        ):
-            print(
-                f"Iteration {iteration}: Old Avg Length = {old_len}, New Avg Length = {new_len}"
-            )
+        for iteration, (old_len, new_len) in enumerate(zip(avg_lengths_old, avg_lengths_new), 1):
+            print(f"Iteration {iteration}: Old Avg Length = {old_len}, New Avg Length = {new_len}")
+
+        # Save average tour lengths to a file
+        iterations = range(1, self.args.numIters + 1)
+        avg_lengths_file = os.path.join(self.graphs_folder, "average_tour_lengths.npz")
+        np.savez(avg_lengths_file,
+            iterations=iterations,
+            avg_lengths_old=avg_lengths_old,
+            avg_lengths_new=avg_lengths_new,)
+
         if self.args.visualize:
-            iterations = range(1, self.args.numIters + 1)
+            plt.figure()
             plt.plot(iterations, avg_lengths_old, label="Old Network")
             plt.plot(iterations, avg_lengths_new, label="New Network")
             plt.xlabel("Iteration")
@@ -172,13 +192,19 @@ class Coach:
             plt.title("Average Tour Lengths Over Iterations")
             plt.legend()
             plt.grid(True)
-            plt.show()
+            # Save the plot
+            plot_filename = os.path.join(
+                self.graphs_folder,
+                f"{self.game.num_nodes}_nodes_{self.game.node_type}_avg_tour_lengths.png",
+            )
+            plt.savefig(plot_filename)
+            plt.close()
 
-    def evaluateNetwork(self, mcts, name = ""):
+    def evaluateNetwork(self, mcts, name=""):
         total_length = 0
         num_episodes = self.args.numEpsEval
-        for _ in tqdm(range(num_episodes),desc="Evluationg " + name + " network"): #tqdm(range(self.args.numEps), desc="Self Play")
-            board = self.game.getInitBoard()
+        for _ in tqdm(range(num_episodes), desc="Evaluating " + name + " network"):
+            board = self.game.getInitState()
             for _ in range(self.args.maxSteps):
                 canonicalBoard = self.game.getCanonicalForm(board)
                 pi = mcts.getActionProb(canonicalBoard, temp=0)

@@ -12,6 +12,7 @@ import torch
 import torch.optim as optim
 
 from .TSPNNet import TSPNNet as nnet
+import csv
 
 
 class NNetWrapper(NeuralNet):
@@ -75,13 +76,11 @@ class NNetWrapper(NeuralNet):
 
         return node_features, adjacency_matrix
 
-    def train(self, examples):
+    def train(self, examples, iteration=0, losses_file=None):
         """
         examples: list of examples, each example is of form (board, pi, v)
         """
         optimizer = optim.Adam(self.nnet.parameters(), lr=self.args.lr)
-        pi_losses_history = []
-        v_losses_history = []
 
         for epoch in range(self.args.epochs):
             print("EPOCH ::: " + str(epoch + 1))
@@ -97,10 +96,10 @@ class NNetWrapper(NeuralNet):
                 batch_count = 1  # Ensure at least one batch
 
             batches = tqdm(range(batch_count), desc="Training Net")
-            for i in batches:
+            for batch_idx in batches:
                 sample_ids = np.arange(
-                    i * self.args.batch_size,
-                    min((i + 1) * self.args.batch_size, len(examples)),
+                    batch_idx * self.args.batch_size,
+                    min((batch_idx + 1) * self.args.batch_size, len(examples)),
                 )
                 batch_examples = [examples[j] for j in sample_ids]
 
@@ -141,9 +140,11 @@ class NNetWrapper(NeuralNet):
                 v_losses.update(l_v.item(), node_features.size(0))
                 batches.set_postfix(Loss_pi=pi_losses.avg, Loss_v=v_losses.avg)
 
-                # Append losses to history
-                pi_losses_history.append(l_pi.item())
-                v_losses_history.append(l_v.item())
+                # Append losses to CSV file
+                if losses_file:
+                    with open(losses_file, 'a', newline='') as f:
+                        writer = csv.writer(f)
+                        writer.writerow([iteration, epoch+1, batch_idx+1, l_pi.item(), l_v.item()])
 
                 # Backpropagation and optimization step
                 optimizer.zero_grad()
@@ -154,7 +155,7 @@ class NNetWrapper(NeuralNet):
                 )
                 optimizer.step()
 
-        return {'pi_losses': pi_losses_history, 'v_losses': v_losses_history}
+        # No need to return losses
 
 
     def predict(self, tsp_state):

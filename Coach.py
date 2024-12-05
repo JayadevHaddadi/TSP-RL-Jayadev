@@ -14,6 +14,8 @@ from TSP.TSPGame import TSPGame
 
 import matplotlib.pyplot as plt
 
+import csv
+
 log = logging.getLogger(__name__)
 
 
@@ -40,6 +42,12 @@ class Coach:
         self.skipFirstSelfPlay = False
         self.best_tour_length = best_tour_length
         self.graphs_folder = graphs_folder
+        
+         # Write header to the losses file
+        self.losses_file = os.path.join(self.graphs_folder, "losses.csv")
+        with open(self.losses_file, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['Iteration', 'Epoch', 'Batch', 'Policy Loss', 'Value Loss'])
 
     def executeEpisode(self):
         """
@@ -122,14 +130,14 @@ class Coach:
             )
             pmcts = MCTS(self.game, self.pnet, self.args)
 
-            train_losses = self.nnet.train(trainExamples)
+            self.nnet.train(trainExamples, iteration=i, losses_file=self.losses_file)
             nmcts = MCTS(self.game, self.nnet, self.args)
 
             # Save loss history to files
-            losses_file = os.path.join(self.graphs_folder, f"losses_iteration_{i}.npz")
-            np.savez(losses_file,
-                pi_losses=train_losses["pi_losses"],
-                v_losses=train_losses["v_losses"],)
+            # losses_file = os.path.join(self.graphs_folder, f"losses_iteration_{i}.npz")
+            # np.savez(losses_file,
+            #     pi_losses=train_losses["pi_losses"],
+            #     v_losses=train_losses["v_losses"],)
 
             log.info("EVALUATING NEW NETWORK")
             # Evaluate the new network by comparing average tour lengths

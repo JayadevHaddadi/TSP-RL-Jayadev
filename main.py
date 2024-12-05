@@ -1,6 +1,5 @@
 import logging
 import os
-import sys
 from datetime import datetime
 
 import torch
@@ -11,51 +10,11 @@ from TSP.pytorch.NNetWrapper import NNetWrapper as neural_net_wrapper
 from Coach import Coach
 from utils import *
 
-def save_node_coordinates(node_coords, filename):
-    """
-    Saves node coordinates to a file in the TSPLIB format.
-    """
-    with open(filename, 'w') as f:
-        f.write("NAME: Generated\n")
-        f.write("TYPE: TSP\n")
-        f.write("DIMENSION: {}\n".format(len(node_coords)))
-        f.write("NODE_COORD_SECTION\n")
-        for idx, (x, y) in enumerate(node_coords, start=1):
-            f.write(f"{idx} {x} {y}\n")
-        f.write("EOF\n")
-
-def setup_logging(log_file_path):
-    """
-    Sets up logging to write both to console and a log file.
-    """
-    # Get the root logger
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-
-    # Remove existing handlers
-    while logger.handlers:
-        logger.handlers.pop()
-
-    # Formatter
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
-
-    # File handler
-    file_handler = logging.FileHandler(log_file_path)
-    file_handler.setLevel(logging.INFO)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-
 def main():
     args = dotdict(
         {
             "numIters": 1000,
-            "numEps": 10,
+            "numEps": 2,
             "tempThreshold": 15,
             "maxlenOfQueue": 200000,
             "numMCTSSims": 25,
@@ -74,7 +33,7 @@ def main():
             # Neural Network parameters
             "lr": 0.001,
             "dropout": 0.3,
-            "epochs": 10,
+            "epochs": 4, #10
             "batch_size": 64,
             "cuda": torch.cuda.is_available(),
             "num_channels": 128,
@@ -170,7 +129,7 @@ def main():
         logging.info("Loading training examples from file...")
         c.loadTrainExamples()
 
-    logging.info("Starting the learning process 🎉")
+    logging.info("Starting the learning process HURRAY")
     c.learn()
 
 if __name__ == "__main__":

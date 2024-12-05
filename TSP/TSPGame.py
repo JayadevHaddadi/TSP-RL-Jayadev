@@ -23,7 +23,7 @@ class TSPGame:
         # Precalculate the valid moves vector (all moves are valid)
         self.valid_moves = np.ones(self.getActionSize(), dtype=int)
 
-    def getInitState(self):
+    def getRandomState(self):
         """
         Return the initial TSP state.
 
@@ -49,7 +49,7 @@ class TSPGame:
         """
         return (self.num_nodes * (self.num_nodes - 1)) // 2
 
-    def getNextState(self,  tsp_state: TSPState, action):
+    def getNextState(self, tsp_state: TSPState, action):
         """
         Given the current state and action, return the next state.
         """

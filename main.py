@@ -10,6 +10,7 @@ from TSP.pytorch.NNetWrapper import NNetWrapper as neural_net_wrapper
 from Coach import Coach
 from utils import *
 
+
 def main():
     args = dotdict(
         {
@@ -26,58 +27,56 @@ def main():
             "maxSteps": 50,
             "numEpsEval": 2,
             "updateThreshold": 0.01,
-
             # New updates
             "maxDepth": 50,
-
             # Neural Network parameters
             "lr": 0.001,
             "dropout": 0.3,
-            "epochs": 4, #10
+            "epochs": 4,  # 10
             "batch_size": 64,
             "cuda": torch.cuda.is_available(),
             "num_channels": 128,
             "max_gradient_norm": 5.0,
-
-            'visualize': True,
-
-            'read_from_file': False,
-            'file_name': 'tsplib/burma14.tsp',
-            'num_nodes': 6,
+            "visualize": True,
+            "read_from_file": False,
+            "file_name": "tsplib/burma14.tsp",
+            "num_nodes": 6,
         }
     )
 
     # Set up run timestamp
-    run_timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    run_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
     # Determine node coordinates and node count
     if args.read_from_file:
         node_coords = read_tsplib(args.file_name)
         num_nodes = len(node_coords)
-        node_type = os.path.splitext(os.path.basename(args.file_name))[0]  # e.g., 'burma14'
+        node_type = os.path.splitext(os.path.basename(args.file_name))[
+            0
+        ]  # e.g., 'burma14'
     else:
         # Define node coordinates for TSP
         num_nodes = args.num_nodes
         node_coords = np.random.rand(num_nodes, 2).tolist()  # List of (x, y) tuples
-        node_type = 'random'
+        node_type = "random"
 
     # Construct run folder name
     run_name = f"{num_nodes}_nodes_{node_type}_{run_timestamp}"
-    run_folder = os.path.join('runs', run_name)
+    run_folder = os.path.join("runs", run_name)
     os.makedirs(run_folder, exist_ok=True)
 
     # Create subfolders
-    graphs_folder = os.path.join(run_folder, 'graphs')
+    graphs_folder = os.path.join(run_folder, "graphs")
     os.makedirs(graphs_folder, exist_ok=True)
 
-    nn_folder = os.path.join(run_folder, 'checkpoints')
+    nn_folder = os.path.join(run_folder, "checkpoints")
     os.makedirs(nn_folder, exist_ok=True)
 
     # Update args.checkpoint to point to nn_folder
     args.checkpoint = nn_folder
 
     # Set up logging
-    log_file = os.path.join(run_folder, 'log.txt')
+    log_file = os.path.join(run_folder, "log.txt")
     setup_logging(log_file)
 
     # Now proceed with the rest of the main function
@@ -85,12 +84,12 @@ def main():
     logging.info(f"Run folder: {run_folder}")
 
     # Save node coordinates to a file in the run folder
-    node_coords_file = os.path.join(run_folder, 'node_coordinates.txt')
+    node_coords_file = os.path.join(run_folder, "node_coordinates.txt")
     save_node_coordinates(node_coords, node_coords_file)
 
     # Now, if reading from file, get the best known solution
     if args.read_from_file:
-        solutions_file = 'tsplib/solutions'  # Adjust the path as needed
+        solutions_file = "tsplib/solutions"  # Adjust the path as needed
         best_solutions = read_solutions(solutions_file)
 
         problem_name = os.path.splitext(os.path.basename(args.file_name))[0]
@@ -100,7 +99,9 @@ def main():
         if best_tour_length is None:
             logging.info(f"No best known solution found for {problem_name}.")
         else:
-            logging.info(f"Best known tour length for {problem_name}: {best_tour_length}")
+            logging.info(
+                f"Best known tour length for {problem_name}: {best_tour_length}"
+            )
     else:
         best_tour_length = None  # Or set to a large value
 
@@ -123,7 +124,7 @@ def main():
         logging.warning("Not loading a checkpoint! Starting from scratch.")
 
     logging.info("Initializing the Coach...")
-    c = Coach(game, nnet, args, best_tour_length=best_tour_length, graphs_folder=graphs_folder)
+    c = Coach(game, nnet, args, best_tour_length=best_tour_length, folder=run_folder)
 
     if args.load_model:
         logging.info("Loading training examples from file...")
@@ -131,6 +132,7 @@ def main():
 
     logging.info("Starting the learning process HURRAY")
     c.learn()
+
 
 if __name__ == "__main__":
     main()

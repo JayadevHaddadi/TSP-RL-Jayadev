@@ -12,10 +12,6 @@ class TSPState:
         """
         self.num_nodes = num_nodes
         self.node_coordinates = node_coordinates  # List of (x, y) tuples
-        self.tour = []  # Current tour (list of node indices)
-        self.max_no_improve = 10  # Stopping criterion (can be adjusted)
-        self.no_improve_counter = 0
-        self.current_length = float("inf")
         self.reset_initial_state()
 
     def reset_initial_state(self):
@@ -26,8 +22,8 @@ class TSPState:
         """
         self.tour = list(range(self.num_nodes))
         np.random.shuffle(self.tour)
-        self.tour = self.get_canonical_tour()
-        self.current_length = self.get_tour_length()
+        self.reset_to_canonical_tour()
+        self.tour_length = self.get_tour_length()
 
     def set_state(self, tour):
         """
@@ -37,8 +33,8 @@ class TSPState:
             tour (array-like): The current tour as a sequence of node indices.
         """
         self.tour = list(tour)
-        self.current_length = self.get_tour_length()
-        self.tour = self.get_canonical_tour()
+        self.tour_length = self.get_tour_length()
+        self.reset_to_canonical_tour()
 
     def get_state(self):
         """
@@ -60,8 +56,8 @@ class TSPState:
         """
         i, j = self.action_index_to_edges(action)
         self.two_opt_swap(i, j)
-        self.current_length = self.get_tour_length()
-        self.tour = self.get_canonical_tour()
+        self.tour_length = self.get_tour_length()
+        self.reset_to_canonical_tour()
 
     def get_valid_actions(self):
         """
@@ -92,7 +88,7 @@ class TSPState:
             length += dist
         return length
 
-    def get_canonical_tour(self):
+    def reset_to_canonical_tour(self):
         """
         Return a canonical form of the tour.
 
@@ -108,7 +104,7 @@ class TSPState:
         if reversed_tour < canonical_tour:
             canonical_tour = reversed_tour
 
-        return canonical_tour
+        self.tour = canonical_tour
 
     def action_index_to_edges(self, action_index):
         """
@@ -167,4 +163,4 @@ class TSPState:
         Returns:
             float: Negative tour length to indicate that lower is better.
         """
-        return -self.current_length
+        return -self.tour_length

@@ -21,15 +21,21 @@ def main():
             "numMCTSSims": 25,
             "cpuct": 1,
             "checkpoint": "./temp/",  # Will be updated later
-            "load_model": True,
-            "load_folder_file": ("./runs/6_nodes_random_20241206-152857/checkpoints", "best.pth.tar"),
-            "load_examples_folder_file": ("./runs/6_nodes_random_20241206-152857/checkpoints", "checkpoint_135.pth.tar"),
+            "load_model": False,
+            "load_folder_file": (
+                "./runs/6_nodes_random_20241206-152857/checkpoints",
+                "best.pth.tar",
+            ),
+            "load_examples_folder_file": (
+                "./runs/6_nodes_random_20241206-152857/checkpoints",
+                "checkpoint_135.pth.tar",
+            ),
             "numItersForTrainExamplesHistory": 20,
-            "maxSteps": 50, # Max steps for each episode
+            "maxSteps": 50,  # Max steps for each episode
             "numEpsEval": 2,
             "updateThreshold": 0.01,
             # New updates
-            "maxDepth": 50, # OF THE MCTS 
+            "maxDepth": 50,  # OF THE MCTS
             # Neural Network parameters
             "lr": 0.001,
             "dropout": 0.3,

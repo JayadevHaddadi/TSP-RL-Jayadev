@@ -1,6 +1,5 @@
 import numpy as np
 
-
 class TSPState:
     def __init__(self, num_nodes, node_coordinates):
         """

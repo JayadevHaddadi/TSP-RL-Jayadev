@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 sys.path.append("..")
 from .TSPState import TSPState
 
+import logging
+log = logging.getLogger(__name__)
 
 class TSPGame:
     def __init__(self, num_nodes, node_coordinates):
@@ -78,7 +80,7 @@ class TSPGame:
         canonical_state.set_state(canonical_tour)
         return canonical_state
 
-    def getSymmetries(self, tsp_state, pi):
+    def getSymmetries(self, tsp_state: TSPState, pi):
         """
         Return symmetric versions of the state and policy vector.
         """
@@ -173,26 +175,42 @@ class TSPGame:
         Args:
             tsp_state (TSPState): The current TSP state.
         """
-        print("Tour:", tsp_state.tour)
+        log.info("Tour:", tsp_state.tour)
         # Compute and display the tour length
         length = tsp_state.get_tour_length()
-        print("Tour Length:", length)
-
-    def plotTour(self, tsp_state, title="Tour", save_path=None):
+        log.info("Tour Length:", length)
+        
+    def plotTour(self, tsp_state, title=None, save_path=None):
         coords = np.array(self.node_coordinates)
-        tour = tsp_state.tour + [tsp_state.tour[0]]
+        tour = tsp_state.tour + [tsp_state.tour[0]]  # complete the loop
 
         plt.figure()
-        plt.plot(coords[tour, 0], coords[tour, 1], "o-", markersize=10)
-        plt.title(title)
-        plt.xlabel("X")
-        plt.ylabel("Y")
+        # Plot edges
+        for i in range(len(tour) - 1):
+            from_node = tour[i]
+            to_node = tour[i + 1]
+            plt.plot([coords[from_node, 0], coords[to_node, 0]],
+                    [coords[from_node, 1], coords[to_node, 1]], 'r-')
+
+        # Plot nodes
+        plt.plot(coords[:, 0], coords[:, 1], 'o', markersize=10)
+
+        # Add node numbering
+        for idx, (x, y) in enumerate(coords):
+            plt.text(x, y, str(idx), fontsize=16, color='green')
+
+        if title:
+            plt.title(title)
+        plt.xlabel('X')
+        plt.ylabel('Y')
         plt.grid(True)
+
         if save_path:
             plt.savefig(save_path)
             plt.close()
         else:
             plt.show()
+
 
     def action_index_to_edges(self, action_index):
         """

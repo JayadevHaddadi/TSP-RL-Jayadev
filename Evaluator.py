@@ -5,13 +5,13 @@ import matplotlib.pyplot as plt
 from TSP.pytorch.NNetWrapper import NNetWrapper
 from MCTS import MCTS
 import logging
-from TSP.TSPGame import TSPGame as Game
+from TSP.TSPGame import TSPGame
 from utils import *
 
 
 class Evaluator:
     def __init__(
-        self, game, nnet, args, node_coords, visualize=False, output_folder="evaluation"
+        self, game: TSPGame, nnet, args, node_coords, visualize=False, output_folder="evaluation"
     ):
         self.game = game
         self.nnet = nnet
@@ -26,7 +26,7 @@ class Evaluator:
 
     def evaluate(self):
         # Initialize state
-        state = self.game.getInitState()
+        state = self.game.getRandomState()
         step = 0
         max_steps = self.args.maxSteps
 
@@ -93,7 +93,8 @@ args = dotdict(
         "maxlenOfQueue": 200000,
         "numMCTSSims": 25,
         "cpuct": 1,
-        "checkpoint": "./runs/6_nodes_random_20241205-104555/checkpoints",  # Will be updated later
+        "checkpoint": "./runs/6_nodes_random_20241206-163000/checkpoints",  # Will be updated later
+        # runs/6_nodes_random_20241205-104555/checkpoints
         "load_model": False,
         "load_folder_file": ("./temp", "best.pth.tar"),
         "numItersForTrainExamplesHistory": 20,
@@ -126,13 +127,15 @@ def evaluate_trained_model():
         node_coords = np.random.rand(args.num_nodes, 2).tolist()
 
     # Initialize game and network
-    game = Game(len(node_coords), node_coords)
+    game = TSPGame(len(node_coords), node_coords)
     nnet = NNetWrapper(game, args)
     # Load the trained model
     nnet.load_checkpoint(args.checkpoint, filename="best.pth.tar")
 
     # Create evaluator
-    evaluator = Evaluator(game, nnet, args, node_coords, visualize=True, output_folder="evaluation_output")
+    evaluator = Evaluator(
+        game, nnet, args, node_coords, visualize=True, output_folder="evaluation_output/eval2"
+    )
 
     # Run evaluation
     evaluator.evaluate()

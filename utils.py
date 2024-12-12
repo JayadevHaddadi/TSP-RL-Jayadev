@@ -6,23 +6,23 @@ import sys
 if not os.path.exists('tours'):
     os.makedirs('tours')
 
+###################################
+# Utility class AverageMeter
+###################################
 class AverageMeter(object):
-    """From https://github.com/pytorch/examples/blob/master/imagenet/main.py"""
-
+    """From original AlphaZero code: computes and stores the average and current value"""
     def __init__(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def __repr__(self):
-        return f'{self.avg:.2e}'
-
+        self.reset()
+    def reset(self):
+        self.val=0
+        self.avg=0
+        self.sum=0
+        self.count=0
     def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
+        self.val=val
+        self.sum+=val*n
+        self.count+=n
+        self.avg=self.sum/self.count
 
 
 class dotdict(dict):

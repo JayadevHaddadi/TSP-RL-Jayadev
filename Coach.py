@@ -40,6 +40,7 @@ class Coach:
         self.trainExamplesHistory = []
         self.best_tour_length = best_tour_length
         self.folder = folder
+        self.L_baseline = self.compute_baseline_length()
 
         self.losses_file = os.path.join(self.folder, "losses.csv")
         with open(self.losses_file, "w", newline="") as f:
@@ -48,40 +49,74 @@ class Coach:
                 ["Iteration", "Epoch", "Batch", "Policy Loss", "Value Loss"]
             )
 
+    def compute_baseline_length(self):
+        coords = self.game.node_coordinates
+        num_nodes = self.game.num_nodes
+        visited = {0}
+        current = 0
+        length = 0.0
+        for _ in range(num_nodes-1):
+            # find nearest unvisited node
+            best_dist = float('inf')
+            best_node = None
+            for node in range(num_nodes):
+                if node not in visited:
+                    x1,y1 = coords[current]
+                    x2,y2 = coords[node]
+                    d = np.hypot(x2 - x1, y2 - y1)
+                    if d < best_dist:
+                        best_dist = d
+                        best_node = node
+            visited.add(best_node)
+            length += best_dist
+            current = best_node
+        # If you want a full tour, return to start:
+        # length += distance from current to node 0 if required
+        # but since we never return to start in forward construction,
+        # let's keep it consistent and not return to 0.
+        return length
+
+
     def executeEpisode(self):
+        # Compute baseline length if not already done
+        # if not hasattr(self, 'L_baseline'):
+        #     self.L_baseline = self.compute_baseline_length()
+
         trainExamples = []
-        tsp_state = self.game.getRandomState()
+        tsp_state = self.game.getInitBoard()
         episodeStep = 0
         maxSteps = self.args.maxSteps
 
-        while episodeStep < maxSteps:
+        # Store states and policies
+        trajectory = []
+
+        while episodeStep < maxSteps and not self.game.isTerminal(tsp_state):
             episodeStep += 1
             temp = int(episodeStep < self.args.tempThreshold)
 
             pi = self.mcts.getActionProb(tsp_state, temp=temp)
 
-            # Data augmentation symmetries
-            symmetries = self.game.getSymmetries(tsp_state, pi)
-            for state, pi in symmetries:
-                trainExamples.append([state, pi, tsp_state.tour_length])
+            # Store the state and pi
+            trajectory.append((tsp_state, pi))
 
+            # Choose action
             action = np.random.choice(len(pi), p=pi)
             tsp_state = self.game.getNextState(tsp_state, action)
 
-        # After the episode ends, compute the final tour length
+        # Once terminal or maxSteps reached, we get final tour length
         final_tour_length = self.game.getTourLength(tsp_state)
 
-        # For each state recorded, compute the value as improvement from that state's tour length
-        # relative to the final tour length.
-        # value = ((current_tour_length - final_tour_length) / current_tour_length)
-        # Clip to [-1, 1]
+        # Compute normalized value with baseline
+        raw_value = (self.L_baseline - final_tour_length) / (self.L_baseline + 1e-8)
+        value = np.clip(raw_value, -1, 1)
+
+        # Assign the same value to all states in this trajectory
         new_trainExamples = []
-        for state, pi, current_length in trainExamples:
-            value = (current_length - final_tour_length) / (current_length + 1e-8)
-            value = np.clip(value, -1, 1)
-            new_trainExamples.append((state, pi, value))
+        for (st, pi) in trajectory:
+            new_trainExamples.append((st, pi, value))
 
         return new_trainExamples
+
 
     def learn(self):
         avg_lengths_new = []

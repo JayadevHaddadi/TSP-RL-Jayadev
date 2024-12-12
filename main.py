@@ -10,7 +10,6 @@ from TSP.pytorch.NNetWrapper import NNetWrapper as neural_net_wrapper
 from Coach import Coach
 from utils import *
 
-
 def main():
     args = dotdict(
         {
@@ -140,7 +139,6 @@ def main():
 
     logging.info("Starting the learning process HURRAY")
     c.learn()
-
 
 if __name__ == "__main__":
     main()

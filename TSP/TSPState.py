@@ -1,165 +1,90 @@
 import numpy as np
 
+###################################
+# TSPState Class
+###################################
 class TSPState:
     def __init__(self, num_nodes, node_coordinates):
         """
-        Initialize the TSP board.
-
-        Args:
-            num_nodes (int): Number of nodes in the TSP.
-            node_coordinates (list of tuples): Coordinates of the nodes.
+        Initialize the TSP partial state.
+        Start with node 0 fixed as the starting node.
         """
         self.num_nodes = num_nodes
-        self.node_coordinates = node_coordinates  # List of (x, y) tuples
+        self.node_coordinates = node_coordinates
         self.reset_initial_state()
 
     def reset_initial_state(self):
         """
-        Generate an initial tour.
-
-        For simplicity, start with a random tour.
+        The initial partial solution is just [0].
+        Unvisited = all other nodes.
         """
-        self.tour = list(range(self.num_nodes))
-        np.random.shuffle(self.tour)
-        self.reset_to_canonical_tour()
-        self.tour_length = self.get_tour_length()
+        self.tour = [0]
+        self.unvisited = set(range(1, self.num_nodes))
+        self.current_length = 0.0  # Just one node, no edges yet.
 
     def set_state(self, tour):
         """
-        Set the current tour state.
-
-        Args:
-            tour (array-like): The current tour as a sequence of node indices.
+        Set the current partial tour state.
+        tour: list of nodes representing the partial tour
         """
         self.tour = list(tour)
-        self.tour_length = self.get_tour_length()
-        self.reset_to_canonical_tour()
+        visited_set = set(tour)
+        self.unvisited = set(range(self.num_nodes)) - visited_set
+        self.current_length = self.get_tour_length()
 
     def get_state(self):
         """
-        Return the current tour state.
-
-        Returns:
-            np.array: The current tour as an array of node indices.
+        Return the current partial tour as np.array.
         """
         return np.array(self.tour)
 
     def execute_action(self, action):
         """
-        Apply an action to the current tour.
-
-        For TSP, actions are 2-opt swaps identified by an index.
-
-        Args:
-            action (int): Index of the action.
+        Action = index of a node in the set of unvisited nodes.
+        We must map action to the chosen node. Let's say actions are just sorted unvisited list.
         """
-        i, j = self.action_index_to_edges(action)
-        self.two_opt_swap(i, j)
-        self.tour_length = self.get_tour_length()
-        self.reset_to_canonical_tour()
+        unvisited_list = sorted(list(self.unvisited))
+        chosen_node = unvisited_list[action]
+        # Add chosen_node to the tour
+        from_node = self.tour[-1]
+        to_node = chosen_node
+        dist = self.distance(from_node, to_node)
+        self.current_length += dist
+        self.tour.append(chosen_node)
+        self.unvisited.remove(chosen_node)
 
-    def get_valid_actions(self):
+    def is_terminal(self):
         """
-        Return a binary vector of valid actions.
-
-        For TSP, all possible 2-opt moves are usually valid.
-
-        Returns:
-            list: A list of ones indicating all actions are valid.
+        Terminal when all nodes are visited.
         """
-        num_actions = (self.num_nodes * (self.num_nodes - 1)) // 2
-        return [1] * num_actions  # All actions are valid
+        return len(self.unvisited) == 0
 
     def get_tour_length(self):
         """
-        Calculate the length of the current tour.
-
-        Returns:
-            float: The total length of the tour.
+        Calculate the length of the current partial tour.
+        If partial, just sum edges along the tour so far (no return to start yet).
         """
-        length = 0
-        for i in range(self.num_nodes):
+        length = 0.0
+        for i in range(len(self.tour)-1):
             from_node = self.tour[i]
-            to_node = self.tour[(i + 1) % self.num_nodes]
-            x1, y1 = self.node_coordinates[from_node]
-            x2, y2 = self.node_coordinates[to_node]
-            dist = np.hypot(x2 - x1, y2 - y1)
-            length += dist
+            to_node = self.tour[i+1]
+            length += self.distance(from_node, to_node)
         return length
-
-    def reset_to_canonical_tour(self):
-        """
-        Return a canonical form of the tour.
-
-        Returns:
-            np.array: The canonical tour as an array of node indices.
-        """
-        min_index = min(self.tour)
-        idx = self.tour.index(min_index)
-        canonical_tour = self.tour[idx:] + self.tour[:idx]
-
-        # Also consider the reversed tour
-        reversed_tour = list(reversed(canonical_tour))
-        if reversed_tour < canonical_tour:
-            canonical_tour = reversed_tour
-
-        self.tour = canonical_tour
-
-    def action_index_to_edges(self, action_index):
-        """
-        Convert an action index to a pair of indices for a 2-opt swap.
-
-        Args:
-            action_index (int): Index of the action.
-
-        Returns:
-            tuple: (i, j) indices of the edges to swap.
-        """
-        # Map action_index to a pair (i, j) where i < j
-        i = 0
-        total = 0
-        n = self.num_nodes
-        for i in range(n - 1):
-            for j in range(i + 1, n):
-                if total == action_index:
-                    return i, j
-                total += 1
-        # If action_index is out of bounds
-        raise ValueError("Invalid action index")
-
-    def two_opt_swap(self, i, j):
-        """
-        Perform a 2-opt swap by reversing the tour between positions i and j.
-
-        Args:
-            i (int): Start index of the swap.
-            j (int): End index of the swap.
-        """
-        if i >= j:
-            return
-        self.tour[i : j + 1] = reversed(self.tour[i : j + 1])
 
     def get_available_actions(self):
         """
-        Get a list of available actions (2-opt swaps).
-
-        Returns:
-            list of tuples: Each tuple contains indices (i, j) for possible swaps.
+        Available actions = choosing any of the unvisited nodes.
         """
-        actions = []
-        n = self.num_nodes
-        for i in range(n - 1):
-            for j in range(i + 1, n):
-                actions.append((i, j))
-        return actions
+        return sorted(list(self.unvisited))
+
+    def distance(self, i, j):
+        x1, y1 = self.node_coordinates[i]
+        x2, y2 = self.node_coordinates[j]
+        return np.hypot(x2 - x1, y2 - y1)
 
     def get_score(self):
         """
-        Get the current score of the tour.
-
-        For TSP, a lower tour length is better.
-
-        Returns:
-            float: Negative tour length to indicate that lower is better.
+        Score could be negative partial length or something similar.
+        For partial tours, we might just return negative of current_length.
         """
-        return -self.tour_length
+        return -self.current_length

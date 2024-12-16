@@ -41,10 +41,12 @@ class TSPState:
     def execute_action(self, action):
         """
         Action = index of a node in the set of unvisited nodes.
-        We must map action to the chosen node. Let's say actions are just sorted unvisited list.
+        We must map 'action' to the chosen node. Actions correspond to choosing
+        one of the currently unvisited nodes based on a sorted list of them.
         """
         unvisited_list = sorted(list(self.unvisited))
         chosen_node = unvisited_list[action]
+
         # Add chosen_node to the tour
         from_node = self.tour[-1]
         to_node = chosen_node
@@ -52,6 +54,14 @@ class TSPState:
         self.current_length += dist
         self.tour.append(chosen_node)
         self.unvisited.remove(chosen_node)
+
+        # If no nodes remain unvisited, the tour is complete.
+        # Add distance from the last node back to the first node to close the tour.
+        if len(self.unvisited) == 0:
+            start_node = self.tour[0]
+            end_node = self.tour[-1]
+            closing_dist = self.distance(end_node, start_node)
+            self.current_length += closing_dist
 
     def is_terminal(self):
         """

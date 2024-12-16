@@ -14,7 +14,7 @@ def main():
     args = dotdict(
         {
             "numIters": 1000,
-            "numEps": 100,
+            "numEps": 10,
             "tempThreshold": 15,
             "maxlenOfQueue": 200000,
             "numMCTSSims": 25,
@@ -45,6 +45,7 @@ def main():
             "visualize": True,
             "read_from_file": False,
             "file_name": "tsplib/burma14.tsp",
+            # For Radom
             "num_nodes": 6,
         }
     )

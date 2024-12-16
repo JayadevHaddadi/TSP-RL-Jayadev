@@ -70,8 +70,12 @@ class NNetWrapper(NeuralNet):
 
         return node_features, adjacency_matrix
 
-    def train(self, examples, iteration=0, losses_file=None):
+    def train(self, examples, iteration=0):
         optimizer = optim.Adam(self.nnet.parameters(), lr=self.args.lr)
+
+        # We'll store only last epoch's average losses for this iteration
+        pi_loss_list = []
+        v_loss_list = []
 
         for epoch in range(self.args.epochs):
             print("EPOCH ::: " + str(epoch+1))
@@ -81,29 +85,26 @@ class NNetWrapper(NeuralNet):
 
             np.random.shuffle(examples)
             batch_count = int(len(examples)/self.args.batch_size)
-            if batch_count==0:
-                batch_count=1
+            if batch_count == 0:
+                batch_count = 1
 
             batches = tqdm(range(batch_count), desc="Training Net")
             for batch_idx in batches:
                 sample_ids = np.arange(batch_idx*self.args.batch_size,
-                                       min((batch_idx+1)*self.args.batch_size,len(examples)))
+                                    min((batch_idx+1)*self.args.batch_size,len(examples)))
                 batch_examples = [examples[j] for j in sample_ids]
 
                 states, target_pis, target_vs = zip(*batch_examples)
 
-                # Process each state individually (since forward expects batch)
-                pi_batch = []
-                v_batch = []
                 node_features_list = []
                 adjacency_list = []
                 for st in states:
                     nf, adj = self.prepare_input(st)
                     node_features_list.append(nf)
                     adjacency_list.append(adj)
-                # Concatenate
-                node_features = torch.cat(node_features_list, dim=0)  # shape: [batch, num_nodes, features]
-                adjacency = torch.cat(adjacency_list, dim=0)  # shape: [batch, num_nodes, num_nodes]
+
+                node_features = torch.cat(node_features_list, dim=0)
+                adjacency = torch.cat(adjacency_list, dim=0)
 
                 target_pis = torch.FloatTensor(np.array(target_pis))
                 target_vs = torch.FloatTensor(np.array(target_vs).astype(np.float32))
@@ -121,15 +122,19 @@ class NNetWrapper(NeuralNet):
                 v_losses.update(l_v.item(), node_features.size(0))
                 batches.set_postfix(Loss_pi=pi_losses.avg, Loss_v=v_losses.avg)
 
-                if losses_file:
-                    with open(losses_file,'a',newline='') as f:
-                        writer = csv.writer(f)
-                        writer.writerow([iteration, epoch+1, batch_idx+1, l_pi.item(), l_v.item()])
-
                 optimizer.zero_grad()
                 total_loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.nnet.parameters(), self.args.max_gradient_norm)
                 optimizer.step()
+
+            # After last epoch, store the final epoch's avg loss
+            pi_loss_list.append(pi_losses.avg)
+            v_loss_list.append(v_losses.avg)
+
+        # Return final epoch's averages (only last epoch or average across epochs?)
+        # Let's just return the last epoch’s losses for simplicity:
+        return pi_loss_list[-1], v_loss_list[-1]
+
 
     def predict(self, state):
         self.nnet.eval()

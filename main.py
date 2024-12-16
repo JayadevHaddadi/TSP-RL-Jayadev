@@ -5,7 +5,7 @@ from datetime import datetime
 import torch
 import numpy as np
 
-from TSP.TSPGame import TSPGame as Game
+from TSP.TSPGame import TSPGame
 from TSP.pytorch.NNetWrapper import NNetWrapper as neural_net_wrapper
 from Coach import Coach
 from utils import *
@@ -14,7 +14,7 @@ def main():
     args = dotdict(
         {
             "numIters": 1000,
-            "numEps": 2,
+            "numEps": 100,
             "tempThreshold": 15,
             "maxlenOfQueue": 200000,
             "numMCTSSims": 25,
@@ -30,11 +30,9 @@ def main():
                 "checkpoint_135.pth.tar",
             ),
             "numItersForTrainExamplesHistory": 20,
-            "maxSteps": 50,  # Max steps for each episode
             "numEpsEval": 2,
             "updateThreshold": 0.01,
-            # New updates
-            "maxDepth": 50,  # OF THE MCTS
+            
             # Neural Network parameters
             "lr": 0.001,
             "dropout": 0.3,
@@ -112,8 +110,8 @@ def main():
     else:
         best_tour_length = None  # Or set to a large value
 
-    logging.info("Initializing %s...", Game.__name__)
-    game = Game(num_nodes, node_coords)  # Initialize TSP game with node coordinates
+    logging.info("Initializing %s...", TSPGame.__name__)
+    game = TSPGame(num_nodes, node_coords, args)  # Initialize TSP game with node coordinates
     game.node_type = node_type  # Add node_type attribute to game
     game.num_nodes = num_nodes
 

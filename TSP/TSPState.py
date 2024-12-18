@@ -5,22 +5,15 @@ import numpy as np
 ###################################
 class TSPState:
     def __init__(self, num_nodes, node_coordinates):
-        """
-        Initialize the TSP partial state.
-        Start with node 0 fixed as the starting node.
-        """
         self.num_nodes = num_nodes
         self.node_coordinates = node_coordinates
-        self.reset_initial_state()
-
-    def reset_initial_state(self):
-        """
-        The initial partial solution is just [0].
-        Unvisited = all other nodes.
-        """
         self.tour = [0]
-        self.unvisited = set(range(1, self.num_nodes))
-        self.current_length = 0.0  # Just one node, no edges yet.
+        # Create a vector of length num_nodes
+        # Node 0 is visited, so unvisited[0] = 0
+        # Others unvisited[i] = 1
+        self.unvisited = np.ones(num_nodes, dtype=int)
+        self.unvisited[0] = 0
+        self.current_length = 0.0
 
     def set_state(self, tour):
         """
@@ -40,34 +33,31 @@ class TSPState:
 
     def execute_action(self, action):
         """
-        Action = index of a node in the set of unvisited nodes.
-        We must map 'action' to the chosen node. Actions correspond to choosing
-        one of the currently unvisited nodes based on a sorted list of them.
+        Action = node ID directly.
+        unvisited[node] = 1 means node is unvisited.
         """
-        unvisited_list = sorted(list(self.unvisited))
-        chosen_node = unvisited_list[action]
+        chosen_node = action
+        if self.unvisited[chosen_node] != 1:
+            raise ValueError(f"Chosen action {chosen_node} is not unvisited.")
 
-        # Add chosen_node to the tour
         from_node = self.tour[-1]
         to_node = chosen_node
         dist = self.distance(from_node, to_node)
         self.current_length += dist
         self.tour.append(chosen_node)
-        self.unvisited.remove(chosen_node)
+        self.unvisited[chosen_node] = 0  # Mark chosen_node as visited
 
-        # If no nodes remain unvisited, the tour is complete.
-        # Add distance from the last node back to the first node to close the tour.
-        if len(self.unvisited) == 0:
+        # If all visited except the start, finalize the tour by closing the loop
+        # Check if no unvisited remain:
+        if np.sum(self.unvisited) == 0:
             start_node = self.tour[0]
             end_node = self.tour[-1]
             closing_dist = self.distance(end_node, start_node)
             self.current_length += closing_dist
 
     def is_terminal(self):
-        """
-        Terminal when all nodes are visited.
-        """
-        return len(self.unvisited) == 0
+        # Terminal if sum of unvisited = 0 (no unvisited nodes)
+        return np.sum(self.unvisited) == 0
 
     def get_tour_length(self):
         """
@@ -91,10 +81,3 @@ class TSPState:
         x1, y1 = self.node_coordinates[i]
         x2, y2 = self.node_coordinates[j]
         return np.hypot(x2 - x1, y2 - y1)
-
-    def get_score(self):
-        """
-        Score could be negative partial length or something similar.
-        For partial tours, we might just return negative of current_length.
-        """
-        return -self.current_length

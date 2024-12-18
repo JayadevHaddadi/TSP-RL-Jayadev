@@ -10,6 +10,7 @@ from TSP.pytorch.NNetWrapper import NNetWrapper as neural_net_wrapper
 from Coach import Coach
 from utils import *
 
+
 def main():
     args = dotdict(
         {
@@ -32,7 +33,6 @@ def main():
             "numItersForTrainExamplesHistory": 20,
             "numEpsEval": 2,
             "updateThreshold": 0.01,
-            
             # Neural Network parameters
             "lr": 0.001,
             "dropout": 0.3,
@@ -112,7 +112,9 @@ def main():
         best_tour_length = None  # Or set to a large value
 
     logging.info("Initializing %s...", TSPGame.__name__)
-    game = TSPGame(num_nodes, node_coords, args)  # Initialize TSP game with node coordinates
+    game = TSPGame(
+        num_nodes, node_coords, args
+    )  # Initialize TSP game with node coordinates
     game.node_type = node_type  # Add node_type attribute to game
     game.num_nodes = num_nodes
 
@@ -138,6 +140,7 @@ def main():
 
     logging.info("Starting the learning process HURRAY")
     c.learn()
+
 
 if __name__ == "__main__":
     main()

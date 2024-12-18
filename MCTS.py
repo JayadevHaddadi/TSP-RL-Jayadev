@@ -2,6 +2,7 @@ import logging
 import math
 import numpy as np
 from TSP.TSPGame import TSPGame
+from TSP.pytorch.NNetWrapper import NNetWrapper
 
 EPS = 1e-8
 log = logging.getLogger(__name__)
@@ -14,7 +15,7 @@ class MCTS:
     - getGameEnded returns final outcome if terminal, else 0.
     """
 
-    def __init__(self, game: TSPGame, nnet, args):
+    def __init__(self, game: TSPGame, nnet: NNetWrapper, args):
         self.game = game
         self.nnet = nnet
         self.args = args

@@ -7,7 +7,9 @@ sys.path.append("..")
 from .TSPState import TSPState
 
 import logging
+
 log = logging.getLogger(__name__)
+
 
 class TSPGame:
     def __init__(self, num_nodes, node_coordinates, args=None):
@@ -16,29 +18,28 @@ class TSPGame:
         self.node_type = None
         self.args = args  # contains L_baseline
 
-    def getInitBoard(self):
-        s = TSPState(self.num_nodes, self.node_coordinates)
-        s.reset_initial_state()
-        return s
+    def getInitState(self):
+        return TSPState(self.num_nodes, self.node_coordinates)
 
-    def getBoardSize(self):
-        return (self.num_nodes,)
-
-    def getActionSize(self):
-        # max actions = num_nodes - 1, choosing next node
-        return self.num_nodes - 1
+    def getNumberOfNodes(self):
+        return self.num_nodes
 
     def getNextState(self, state: TSPState, action):
         next_state = copy.deepcopy(state)
         next_state.execute_action(action)
         return next_state
 
+    def getActionSize(self):
+        # Actions correspond to node IDs: 0 to num_nodes-1
+        return self.num_nodes
+
     def getValidMoves(self, state: TSPState):
-        valid = np.zeros(self.getActionSize(), dtype=int)
-        available = state.get_available_actions()
-        for i in range(len(available)):
-            valid[i] = 1
-        return valid
+        """
+        Simply return the unvisited array.
+        Since node 0 was visited at start, unvisited[0] = 0 always,
+        ensuring we never pick node 0 again.
+        """
+        return state.unvisited
 
     def isTerminal(self, state: TSPState):
         return state.is_terminal()
@@ -55,7 +56,7 @@ class TSPGame:
         if self.isTerminal(state):
             L_final = self.getTourLength(state)
             L_baseline = self.args.L_baseline
-            raw_value = (L_baseline - L_final)/(L_baseline+1e-8)
+            raw_value = (L_baseline - L_final) / (L_baseline + 1e-8)
             clipped = float(np.clip(raw_value, -1, 1))
 
             # If ended and clipped == 0, return a tiny epsilon
@@ -65,7 +66,6 @@ class TSPGame:
             return clipped
 
         return 0
-
 
     def getCanonicalForm(self, state: TSPState):
         # No player switching, return state as is
@@ -91,28 +91,34 @@ class TSPGame:
 
         plt.figure()
         # Plot edges for the partial tour
-        for i in range(len(tour)-1):
+        for i in range(len(tour) - 1):
             from_node = tour[i]
-            to_node = tour[i+1]
-            plt.plot([coords[from_node, 0], coords[to_node, 0]],
-                    [coords[from_node, 1], coords[to_node, 1]], 'r-')
+            to_node = tour[i + 1]
+            plt.plot(
+                [coords[from_node, 0], coords[to_node, 0]],
+                [coords[from_node, 1], coords[to_node, 1]],
+                "r-",
+            )
 
         # Close the loop by connecting the last node back to the first node
         if len(tour) > 1:
             from_node = tour[-1]
             to_node = tour[0]
-            plt.plot([coords[from_node, 0], coords[to_node, 0]],
-                    [coords[from_node, 1], coords[to_node, 1]], 'r--')  # dashed line to show return
+            plt.plot(
+                [coords[from_node, 0], coords[to_node, 0]],
+                [coords[from_node, 1], coords[to_node, 1]],
+                "r--",
+            )  # dashed line to show return
 
-        plt.plot(coords[:,0], coords[:,1], 'o', markersize=10)
+        plt.plot(coords[:, 0], coords[:, 1], "o", markersize=10)
 
-        for idx,(x,y) in enumerate(coords):
-            plt.text(x,y,str(idx), fontsize=12, color='green')
+        for idx, (x, y) in enumerate(coords):
+            plt.text(x, y, str(idx), fontsize=12, color="green")
 
         if title:
             plt.title(title)
-        plt.xlabel('X')
-        plt.ylabel('Y')
+        plt.xlabel("X")
+        plt.ylabel("Y")
         plt.grid(True)
 
         if save_path:

@@ -2,15 +2,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from TSP.TSPGame import TSPGame
+
 
 ###################################
 # TSPNNet Class
 ###################################
 class TSPNNet(nn.Module):
-    def __init__(self, game, args):
+    def __init__(self, game: TSPGame, args):
         super(TSPNNet, self).__init__()
         self.args = args
-        self.num_nodes = game.getBoardSize()[0]
+        self.num_nodes = game.getNumberOfNodes()
         # Actions: choose next node from remaining unvisited.
         # max action size = num_nodes-1
         self.action_size = game.getActionSize()

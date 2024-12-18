@@ -33,14 +33,19 @@ class Coach:
         self.trainExamplesHistory = []
         self.best_tour_length = best_tour_length
         self.folder = folder
-        self.L_baseline = args.num_nodes/2#self.compute_baseline_length()
+
+        # Compute nearest neighbor length as a reference
+        self.nn_length = self.compute_nn_length()
+        # Set a baseline as simple function of num_nodes
+        self.baseline = args.num_nodes / 2
+
         self.iteration_pi_loss_history = []
         self.iteration_v_loss_history = []
         self.avg_lengths_new = []
         self.avg_lengths_old = []
 
         # Store baseline in args so TSPGame and others can access it
-        self.args.L_baseline = self.L_baseline
+        self.args.L_baseline = self.baseline
 
         self.losses_file = os.path.join(self.folder, "losses.csv")
         with open(self.losses_file, "w", newline="") as f:
@@ -49,7 +54,7 @@ class Coach:
                 ["Iteration", "Epoch", "Batch", "Policy Loss", "Value Loss"]
             )
 
-    def compute_baseline_length(self):
+    def compute_nn_length(self):
         coords = self.game.node_coordinates
         num_nodes = self.game.num_nodes
         visited = {0}
@@ -76,25 +81,23 @@ class Coach:
 
         trajectory = []
 
-        # Self-play until terminal or maxSteps
+        # Self-play until terminal or maxSteps (maxSteps not currently used)
         while not self.game.isTerminal(tsp_state):
-            # we can start off by having higher EXPLORATION in early episodes and less later on
             pi = self.mcts.getActionProb(tsp_state, temp=1)
             trajectory.append((tsp_state, pi))
 
             action = np.random.choice(len(pi), p=pi)
             tsp_state = self.game.getNextState(tsp_state, action)
 
-        # Terminal or max steps reached
+        # Terminal state reached
         final_tour_length = self.game.getTourLength(tsp_state)
-        raw_value = (self.L_baseline - final_tour_length) / (self.L_baseline + 1e-8)
+        raw_value = (self.baseline - final_tour_length) / (self.baseline + 1e-8)
         value = np.clip(raw_value, -1, 1)
 
         new_trainExamples = []
         for st, pi in trajectory:
             new_trainExamples.append((st, pi, value))
 
-        # print("examples from episode", len(new_trainExamples))
         return new_trainExamples
 
     def learn(self):
@@ -131,7 +134,6 @@ class Coach:
             )
 
             pmcts = MCTS(self.game, self.old_net, self.args)
-            
             print("examples from episode", len(trainExamples))
             final_pi_loss, final_v_loss = self.nnet.train(trainExamples)
             nmcts = MCTS(self.game, self.nnet, self.args)
@@ -156,9 +158,6 @@ class Coach:
             ):
                 best_so_far = best_state_new
                 log.info("ACCEPTING NEW MODEL")
-                # self.nnet.save_checkpoint(
-                #     folder=self.args.checkpoint, filename=self.getCheckpointFile(i)
-                # )
                 self.nnet.save_checkpoint(
                     folder=self.args.checkpoint, filename="best.pth.tar"
                 )
@@ -170,7 +169,6 @@ class Coach:
                 )
 
             # Write current iteration's losses and lengths to CSV
-            # iteration, final_pi_loss, final_v_loss, avg_length_new, avg_length_old
             try:
                 with open(self.losses_file, "a", newline="") as f:
                     writer = csv.writer(f)
@@ -195,6 +193,7 @@ class Coach:
 
             # Update loss and length plot
             self.plot_loss_and_length_history()
+            self.plot_value_loss_history()
 
             if self.args.visualize:
                 rounded_len = round(best_so_far.current_length, 4)
@@ -215,19 +214,19 @@ class Coach:
                 f"Iteration {iteration}: Old Avg Length = {old_len}, New Avg Length = {new_len}"
             )
 
-        if self.args.visualize:
-            # Already plotted continuously, final plot also updated.
-            pass
-
     def plot_loss_and_length_history(self):
         """
-        Plot both losses and tour lengths over iterations.
-        We'll have one iteration = one data point for final losses and final lengths.
-        We'll also add a horizontal line for L_baseline.
-
-        Left y-axis: losses (pi and value)
-        Right y-axis: tour length (avg_lengths_new) and baseline line
+        Plot losses (pi and value) and tour lengths over iterations.
+        We have:
+        - iteration_pi_loss_history
+        - iteration_v_loss_history
+        - avg_lengths_new (new network)
+        - avg_lengths_old (old network)
+        - L_baseline: a fixed baseline line
+        - nn_length: nearest neighbor solution line (purple)
+        - best_tour_length: if not None, plot as another line
         """
+
         if len(self.iteration_pi_loss_history) == 0:
             return
 
@@ -261,14 +260,31 @@ class Coach:
             label="New Network Tour Length",
             color="green",
         )
-        # Horizontal line for baseline
+
+        # Horizontal lines for references
         L_baseline = self.args.L_baseline
         ax2.axhline(
             y=L_baseline,
             color="red",
             linestyle="--",
-            label="Baseline (Nearest Neighbor)",
+            label="Baseline (Simple)",
         )
+        # Nearest neighbor line
+        ax2.axhline(
+            y=self.nn_length,
+            color="purple",
+            linestyle="-.",
+            label="Nearest Neighbor"
+        )
+        # If best_tour_length is known, plot it too
+        if self.best_tour_length is not None:
+            ax2.axhline(
+                y=self.best_tour_length,
+                color="brown",
+                linestyle=":",
+                label="Loaded Best Solution"
+            )
+
         ax2.set_ylabel("Tour Length")
         ax2.legend(loc="upper right")
 
@@ -280,6 +296,28 @@ class Coach:
         plt.savefig(loss_plot_path)
         plt.close()
 
+    def plot_value_loss_history(self):
+        """
+        Plot only the value loss over iterations separately,
+        since value loss might be smaller and we want a better scale.
+        """
+        if len(self.iteration_v_loss_history) == 0:
+            return
+
+        iterations = np.arange(1, len(self.iteration_v_loss_history) + 1)
+
+        plt.figure()
+        plt.plot(iterations, self.iteration_v_loss_history, color='orange', label="Value Loss")
+        plt.xlabel("Iteration")
+        plt.ylabel("Value Loss")
+        plt.title("Value Loss Over Iterations")
+        plt.grid(True)
+        plt.legend()
+
+        value_loss_path = os.path.join(self.folder, "graphs", "value_loss_history.png")
+        plt.savefig(value_loss_path)
+        plt.close()
+
     def evaluateNetwork(self, mcts: MCTS, name=""):
         tsp_state = self.game.getInitState()
         best_tsp_state = tsp_state
@@ -287,7 +325,6 @@ class Coach:
         for _ in range(self.game.getActionSize()):
             # Check terminal condition
             if self.game.isTerminal(tsp_state):
-                # Tour completed or no moves remain
                 break
 
             pi = mcts.getActionProb(tsp_state, temp=0)
@@ -296,7 +333,7 @@ class Coach:
             valid_moves = self.game.getValidMoves(tsp_state)
             pi = pi * valid_moves
             if np.sum(pi) == 0:
-                # No valid moves remain, so it's effectively terminal
+                # No valid moves remain
                 break
             pi = pi / np.sum(pi)
 
@@ -307,7 +344,6 @@ class Coach:
                 best_tsp_state = next_tsp_state
             tsp_state = next_tsp_state
 
-        # After loop or break, best_tsp_state is our best known
         best_current = best_tsp_state.current_length
         best_tour_length = self.best_tour_length
         if best_tour_length is not None:
@@ -319,7 +355,6 @@ class Coach:
             log.info(f"Current best Length for {name}: {best_current}")
 
         return best_tsp_state
-
 
     def saveTrainExamples(self):
         folder = self.args.checkpoint

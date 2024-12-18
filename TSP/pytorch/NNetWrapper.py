@@ -13,8 +13,6 @@ import torch
 import torch.optim as optim
 
 from .TSPNNet import TSPNNet
-import csv
-
 
 ###################################
 # NNetWrapper Class

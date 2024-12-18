@@ -35,6 +35,7 @@ class MCTS:
             self.Nsa[(s, a)] if (s, a) in self.Nsa else 0
             for a in range(self.game.getActionSize())
         ]
+        # print("counts",counts)
 
         if temp == 0:
             bestAs = np.argwhere(counts == np.max(counts)).flatten()

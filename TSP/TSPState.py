@@ -8,9 +8,6 @@ class TSPState:
         self.num_nodes = num_nodes
         self.node_coordinates = node_coordinates
         self.tour = [0]
-        # Create a vector of length num_nodes
-        # Node 0 is visited, so unvisited[0] = 0
-        # Others unvisited[i] = 1
         self.unvisited = np.ones(num_nodes, dtype=int)
         self.unvisited[0] = 0
         self.current_length = 0.0

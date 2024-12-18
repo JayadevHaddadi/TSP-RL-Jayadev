@@ -3,9 +3,6 @@ import os
 import logging
 import sys
 
-if not os.path.exists('tours'):
-    os.makedirs('tours')
-
 ###################################
 # Utility class AverageMeter
 ###################################

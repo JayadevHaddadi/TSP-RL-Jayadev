@@ -33,9 +33,7 @@ class Coach:
         self.trainExamplesHistory = []
         self.best_tour_length = best_tour_length
         self.folder = folder
-        self.L_baseline = self.compute_baseline_length()
-        # self.pi_loss_history = []
-        # self.v_loss_history = []
+        self.L_baseline = args.num_nodes/2#self.compute_baseline_length()
         self.iteration_pi_loss_history = []
         self.iteration_v_loss_history = []
         self.avg_lengths_new = []
@@ -96,6 +94,7 @@ class Coach:
         for st, pi in trajectory:
             new_trainExamples.append((st, pi, value))
 
+        # print("examples from episode", len(new_trainExamples))
         return new_trainExamples
 
     def learn(self):
@@ -132,6 +131,8 @@ class Coach:
             )
 
             pmcts = MCTS(self.game, self.old_net, self.args)
+            
+            print("examples from episode", len(trainExamples))
             final_pi_loss, final_v_loss = self.nnet.train(trainExamples)
             nmcts = MCTS(self.game, self.nnet, self.args)
 
@@ -170,24 +171,27 @@ class Coach:
 
             # Write current iteration's losses and lengths to CSV
             # iteration, final_pi_loss, final_v_loss, avg_length_new, avg_length_old
-            with open(self.losses_file, "a", newline="") as f:
-                writer = csv.writer(f)
-                # We'll record iteration-level data
-                writer.writerow(
-                    [
-                        i,
-                        "",
-                        "",
-                        final_pi_loss,
-                        final_v_loss,
-                        self.avg_lengths_new[-1],
-                        (
-                            self.avg_lengths_old[-1]
-                            if len(self.avg_lengths_old) == i
-                            else ""
-                        ),
-                    ]
-                )
+            try:
+                with open(self.losses_file, "a", newline="") as f:
+                    writer = csv.writer(f)
+                    # We'll record iteration-level data
+                    writer.writerow(
+                        [
+                            i,
+                            "",
+                            "",
+                            final_pi_loss,
+                            final_v_loss,
+                            self.avg_lengths_new[-1],
+                            (
+                                self.avg_lengths_old[-1]
+                                if len(self.avg_lengths_old) == i
+                                else ""
+                            ),
+                        ]
+                    )
+            except:
+                log.error("losses file was in use, couldnt write to file.")
 
             # Update loss and length plot
             self.plot_loss_and_length_history()
@@ -203,11 +207,11 @@ class Coach:
                 )
                 self.game.plotTour(best_so_far, title=title, save_path=save_path)
 
-        print("Average Tour Lengths per Iteration:")
+        log.info("Average Tour Lengths per Iteration:")
         for iteration, (old_len, new_len) in enumerate(
             zip(self.avg_lengths_old, self.avg_lengths_new), 1
         ):
-            print(
+            log.info(
                 f"Iteration {iteration}: Old Avg Length = {old_len}, New Avg Length = {new_len}"
             )
 

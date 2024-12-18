@@ -15,7 +15,7 @@ def main():
     args = dotdict(
         {
             "numIters": 1000,
-            "numEps": 10,
+            "numEps": 20,
             "tempThreshold": 15,
             "maxlenOfQueue": 200000,
             "numMCTSSims": 25,
@@ -36,7 +36,7 @@ def main():
             # Neural Network parameters
             "lr": 0.001,
             "dropout": 0.3,
-            "epochs": 4,  # 10
+            "epochs": 5,  # 10
             "batch_size": 64,
             "cuda": torch.cuda.is_available(),
             "num_channels": 128,
@@ -46,7 +46,7 @@ def main():
             "read_from_file": False,
             "file_name": "tsplib/burma14.tsp",
             # For Radom
-            "num_nodes": 6,
+            "num_nodes": 10,
         }
     )
 

@@ -84,7 +84,7 @@ class Coach:
         # Self-play until terminal or maxSteps (maxSteps not currently used)
         while not self.game.isTerminal(tsp_state):
             pi = self.mcts.getActionProb(tsp_state, temp=1)
-            print(pi)
+            # print(pi)
             trajectory.append((tsp_state, pi))
 
             action = np.random.choice(len(pi), p=pi)
@@ -94,7 +94,7 @@ class Coach:
         final_tour_length = self.game.getTourLength(tsp_state)
         raw_value = (self.baseline - final_tour_length) / self.baseline
         value = np.clip(raw_value, -1, 1)
-        print(value)
+        # print(value)
 
         new_trainExamples = []
         for st, pi in trajectory:

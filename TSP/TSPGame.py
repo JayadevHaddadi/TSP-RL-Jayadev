@@ -56,7 +56,7 @@ class TSPGame:
         if self.isTerminal(state):
             L_final = self.getTourLength(state)
             L_baseline = self.args.L_baseline
-            raw_value = (L_baseline - L_final) / (L_baseline + 1e-8)
+            raw_value = (L_baseline - L_final) / (L_baseline)
             clipped = float(np.clip(raw_value, -1, 1))
 
             # If ended and clipped == 0, return a tiny epsilon
@@ -78,8 +78,30 @@ class TSPGame:
     def getTourLength(self, state: TSPState):
         return state.get_tour_length()
 
+    # def uniqueStringRepresentation(self, state: TSPState):
+    #     return ",".join(map(str, state.tour))
+
     def uniqueStringRepresentation(self, state: TSPState):
-        return ",".join(map(str, state.tour))
+        tour = state.tour
+        # Ensure node 0 is at start
+        if tour[0] != 0:
+            idx_zero = tour.index(0)
+            # rotate
+            rotated = tour[idx_zero:] + tour[:idx_zero]
+        else:
+            rotated = tour
+
+        # Now consider reversed
+        reversed_tour = list(reversed(rotated))
+
+        # Compare lexicographically
+        forward_str = ",".join(map(str, rotated))
+        reverse_str = ",".join(map(str, reversed_tour))
+
+        if reverse_str < forward_str:
+            return reverse_str
+        else:
+            return forward_str
 
     def display(self, state: TSPState):
         log.info(f"Tour: {state.tour}")

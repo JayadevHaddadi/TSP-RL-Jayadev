@@ -21,14 +21,14 @@ def main():
             "numMCTSSims": 25,
             "cpuct": 1,
             "checkpoint": "./temp/",  # Will be updated later
-            "load_model": False,
+            "load_model": True,
             "load_folder_file": (
-                "./runs/6_nodes_random_20241206-152857/checkpoints",
+                "./runs/10_nodes_random_20241219-104235/checkpoints",
                 "best.pth.tar",
             ),
             "load_examples_folder_file": (
-                "./runs/6_nodes_random_20241206-152857/checkpoints",
-                "checkpoint_135.pth.tar",
+                "./runs/10_nodes_random_20241219-104235/checkpoints",
+                "checkpoint",
             ),
             "numItersForTrainExamplesHistory": 20,
             "numEpsEval": 2,
@@ -43,8 +43,8 @@ def main():
             "max_gradient_norm": 5.0,
             # Nodes
             "visualize": True,
-            "read_from_file": False,
-            "file_name": "tsplib/burma14.tsp",
+            "read_from_file": True,
+            "file_name": "./runs/10_nodes_random_20241219-104235/node_coordinates.txt",
             # For Radom
             "num_nodes": 10,
         }

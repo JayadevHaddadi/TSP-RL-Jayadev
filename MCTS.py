@@ -51,9 +51,19 @@ class MCTS:
 
     def search(self, canonicalBoard):
         s = self.game.uniqueStringRepresentation(canonicalBoard)
+        # Dirichlet Noise for Better Exploration: AlphaZero adds Dirichlet noise 
+        # to Ps[s] at the root node to ensure initial exploration of multiple moves rather 
+        # than getting stuck too early. This code doesn't seem to add such noise. Adding:
+
+        # python
+        # Copy code
+        # if is_root_node:
+        #     Ps[s] = (1 - noise_alpha)*Ps[s] + noise_alpha*dirichlet_noise
 
         if s not in self.Es:
+            # 0 if not ended and non zero if ended
             self.Es[s] = self.game.getGameEnded(canonicalBoard)
+
         if self.Es[s] != 0:
             # Terminal node
             return self.Es[s]
@@ -75,7 +85,8 @@ class MCTS:
             self.Vs[s] = valids
             self.Ns[s] = 0
             return v
-
+        
+        # Internal Node
         valids = self.Vs[s]
         cur_best = -float("inf")
         best_act = -1
@@ -93,7 +104,7 @@ class MCTS:
 
         a = best_act
         next_s = self.game.getNextState(canonicalBoard, a)
-
+        # Do best expected action
         v = self.search(next_s)
 
         # Update Q, N

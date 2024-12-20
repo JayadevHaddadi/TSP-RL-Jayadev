@@ -84,6 +84,7 @@ class Coach:
         # Self-play until terminal or maxSteps (maxSteps not currently used)
         while not self.game.isTerminal(tsp_state):
             pi = self.mcts.getActionProb(tsp_state, temp=1)
+            print(pi)
             trajectory.append((tsp_state, pi))
 
             action = np.random.choice(len(pi), p=pi)
@@ -91,8 +92,9 @@ class Coach:
 
         # Terminal state reached
         final_tour_length = self.game.getTourLength(tsp_state)
-        raw_value = (self.baseline - final_tour_length) / (self.baseline + 1e-8)
+        raw_value = (self.baseline - final_tour_length) / self.baseline
         value = np.clip(raw_value, -1, 1)
+        print(value)
 
         new_trainExamples = []
         for st, pi in trajectory:
@@ -153,20 +155,29 @@ class Coach:
                 f"Average Tour Length - New: {best_state_new.current_length}, Old: {best_state_old.current_length}"
             )
 
-            if best_state_new.current_length < best_state_old.current_length * (
-                1 - self.args.updateThreshold
-            ):
+            if best_state_new.current_length < best_state_old.current_length * (1 - self.args.updateThreshold):
                 best_so_far = best_state_new
                 log.info("ACCEPTING NEW MODEL")
                 self.nnet.save_checkpoint(
                     folder=self.args.checkpoint, filename="best.pth.tar"
                 )
-            else:
-                best_so_far = best_state_old
-                log.info("REJECTING NEW MODEL")
-                self.nnet.load_checkpoint(
-                    folder=self.args.checkpoint, filename="temp.pth.tar"
-                )
+
+                # If this is a truly better solution than any found before (including the currently known best_tour_length),
+                # update baseline.
+                if (self.best_tour_length is None) or (best_so_far.current_length < self.best_tour_length):
+                    self.best_tour_length = best_so_far.current_length
+                    # Update the baseline to something around the best known solution, for instance equal to that new best_tour_length
+                    self.args.L_baseline = self.best_tour_length
+
+                    log.info(f"New best length found: {self.best_tour_length}. Updated baseline to this value.")
+
+                else:
+                    best_so_far = best_state_old
+                    log.info("REJECTING NEW MODEL")
+                    self.nnet.load_checkpoint(
+                        folder=self.args.checkpoint, filename="temp.pth.tar"
+                    )
+
 
             # Write current iteration's losses and lengths to CSV
             try:

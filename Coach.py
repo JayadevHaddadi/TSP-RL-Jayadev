@@ -171,12 +171,12 @@ class Coach:
 
                     log.info(f"New best length found: {self.best_tour_length}. Updated baseline to this value.")
 
-                else:
-                    best_so_far = best_state_old
-                    log.info("REJECTING NEW MODEL")
-                    self.nnet.load_checkpoint(
-                        folder=self.args.checkpoint, filename="temp.pth.tar"
-                    )
+            else:
+                best_so_far = best_state_old
+                log.info("REJECTING NEW MODEL")
+                self.nnet.load_checkpoint(
+                    folder=self.args.checkpoint, filename="temp.pth.tar"
+                )
 
 
             # Write current iteration's losses and lengths to CSV

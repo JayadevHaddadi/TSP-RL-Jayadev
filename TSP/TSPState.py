@@ -46,7 +46,7 @@ class TSPState:
 
         # If all visited except the start, finalize the tour by closing the loop
         # Check if no unvisited remain:
-        if np.sum(self.unvisited) == 0:
+        if self.is_terminal():
             start_node = self.tour[0]
             end_node = self.tour[-1]
             closing_dist = self.distance(end_node, start_node)
@@ -57,16 +57,7 @@ class TSPState:
         return np.sum(self.unvisited) == 0
 
     def get_tour_length(self):
-        """
-        Calculate the length of the current partial tour.
-        If partial, just sum edges along the tour so far (no return to start yet).
-        """
-        length = 0.0
-        for i in range(len(self.tour)-1):
-            from_node = self.tour[i]
-            to_node = self.tour[i+1]
-            length += self.distance(from_node, to_node)
-        return length
+        return self.current_length
 
     def get_available_actions(self):
         """

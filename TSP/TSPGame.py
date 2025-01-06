@@ -44,28 +44,11 @@ class TSPGame:
     def isTerminal(self, state: TSPState):
         return state.is_terminal()
 
-    def getGameEnded(self, state):
-        """
-        Returns a value in [-1,1] if the state is terminal, else 0 if not terminal.
-
-        If ended:
-        raw_value = (L_baseline - L_final)/(L_baseline+1e-8)
-        clipped = np.clip(raw_value, -1, 1)
-        If clipped == 0 exactly, return 1e-12 to indicate ended state with no improvement.
-        """
-        if self.isTerminal(state):
-            L_final = self.getTourLength(state)
-            L_baseline = self.args.L_baseline
-            raw_value = (L_baseline - L_final) / (L_baseline)
-            clipped = float(np.clip(raw_value, -1, 1))
-
-            # If ended and clipped == 0, return a tiny epsilon
-            # to avoid confusion with non-ended states
-            if np.isclose(clipped, 0.0):
-                return 1e-12
-            return clipped
-
-        return 0
+    def getFinalScore(self, state):
+        if not self.isTerminal(state):
+            raise Exception("Dont call final score unless state is terminal")
+        
+        return -self.getTourLength(state)
 
     def getCanonicalForm(self, state: TSPState):
         # No player switching, return state as is
@@ -77,9 +60,6 @@ class TSPGame:
 
     def getTourLength(self, state: TSPState):
         return state.get_tour_length()
-
-    # def uniqueStringRepresentation(self, state: TSPState):
-    #     return ",".join(map(str, state.tour))
 
     def uniqueStringRepresentation(self, state: TSPState):
         tour = state.tour
@@ -107,12 +87,19 @@ class TSPGame:
         log.info(f"Tour: {state.tour}")
         log.info(f"Length: {state.get_tour_length()}")
 
-    def plotTour(self, state: TSPState, title=None, save_path=None):
+
+    def plotTour(self, state=None, title=None, save_path=None, input_tour=None):
         coords = np.array(self.node_coordinates)
-        tour = state.tour
+        if input_tour is None:
+            tour = state.tour if state else None
+        else:
+            tour = input_tour
+
+        if tour is None:
+            raise ValueError("No tour provided to plot")
 
         plt.figure()
-        # Plot edges for the partial tour
+        # Plot edges for the tour
         for i in range(len(tour) - 1):
             from_node = tour[i]
             to_node = tour[i + 1]
@@ -135,7 +122,7 @@ class TSPGame:
         plt.plot(coords[:, 0], coords[:, 1], "o", markersize=10)
 
         for idx, (x, y) in enumerate(coords):
-            plt.text(x, y, str(idx), fontsize=12, color="green")
+            plt.text(x, y, str(idx), fontsize=12, color="black")
 
         if title:
             plt.title(title)

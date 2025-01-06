@@ -87,18 +87,57 @@ def write_tsplib(filename, node_coordinates):
             f.write(f"{i} {x} {y}\n")
         f.write("EOF\n")
 
-def save_node_coordinates(node_coords, filename):
+def save_node_coordinates(node_coords, filename, NN_length, NN_tour):
     """
-    Saves node coordinates to a file in the TSPLIB format.
+    Saves node coordinates and NN tour/length to a file in the TSPLIB format.
     """
     with open(filename, 'w') as f:
         f.write("NAME: Generated\n")
         f.write("TYPE: TSP\n")
         f.write("DIMENSION: {}\n".format(len(node_coords)))
+        f.write("NN_LENGTH: {:.2f}\n".format(NN_length))  # Format NN length as float
+        f.write("NN_TOUR: {}\n".format(" ".join(map(str, NN_tour))))  # Format NN tour as space-separated string
         f.write("NODE_COORD_SECTION\n")
         for idx, (x, y) in enumerate(node_coords, start=1):
             f.write(f"{idx} {x} {y}\n")
         f.write("EOF\n")
+
+
+def compute_nn_tour(coords):
+    num_nodes = len(coords)
+    visited = {0}
+    current = 0
+    tour = [0]  # Start with node 0 as the initial tour
+    tour_length = 0.0  # Initialize tour length
+    
+    for _ in range(num_nodes - 1):
+        best_dist = float("inf")
+        best_node = None
+        
+        for node in range(num_nodes):
+            if node not in visited:
+                x1, y1 = coords[current]
+                x2, y2 = coords[node]
+                d = np.hypot(x2 - x1, y2 - y1)
+                
+                if d < best_dist:
+                    best_dist = d
+                    best_node = node
+        
+        visited.add(best_node)
+        tour.append(best_node)  # Add the best node to the tour
+        tour_length += best_dist  # Add the distance to the tour length
+        current = best_node
+    
+    # Add the last edge from the last visited node back to the starting node (node 0)
+    x1, y1 = coords[current]
+    x2, y2 = coords[0]  # Starting node
+    last_edge = np.hypot(x2 - x1, y2 - y1)
+    
+    tour_length += last_edge  # Add the last edge length to the tour length
+    tour.append(0)  # Add the starting node to close the tour
+
+    return tour_length, tour
 
 def setup_logging(log_file_path):
     """

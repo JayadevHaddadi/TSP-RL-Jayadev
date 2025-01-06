@@ -4,10 +4,6 @@ import torch.nn.functional as F
 
 from TSP.TSPGame import TSPGame
 
-
-###################################
-# TSPNNet Class
-###################################
 class TSPNNet(nn.Module):
     def __init__(self, game: TSPGame, args):
         super(TSPNNet, self).__init__()
@@ -50,7 +46,6 @@ class TSPNNet(nn.Module):
         pi = F.softmax(pi, dim=1)
 
         v = self.fc_v(x)
-        v = torch.tanh(v)
 
         return pi, v
 

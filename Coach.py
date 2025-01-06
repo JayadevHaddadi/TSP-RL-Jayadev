@@ -34,18 +34,10 @@ class Coach:
         self.best_tour_length = best_tour_length
         self.folder = folder
 
-        # Compute nearest neighbor length as a reference
-        self.nn_length = self.compute_nn_length()
-        # Set a baseline as simple function of num_nodes
-        self.baseline = args.num_nodes / 2
-
         self.iteration_pi_loss_history = []
         self.iteration_v_loss_history = []
         self.avg_lengths_new = []
         self.avg_lengths_old = []
-
-        # Store baseline in args so TSPGame and others can access it
-        self.args.L_baseline = self.baseline
 
         self.losses_file = os.path.join(self.folder, "losses.csv")
         with open(self.losses_file, "w", newline="") as f:
@@ -53,28 +45,6 @@ class Coach:
             writer.writerow(
                 ["Iteration", "Epoch", "Batch", "Policy Loss", "Value Loss"]
             )
-
-    def compute_nn_length(self):
-        coords = self.game.node_coordinates
-        num_nodes = self.game.num_nodes
-        visited = {0}
-        current = 0
-        length = 0.0
-        for _ in range(num_nodes - 1):
-            best_dist = float("inf")
-            best_node = None
-            for node in range(num_nodes):
-                if node not in visited:
-                    x1, y1 = coords[current]
-                    x2, y2 = coords[node]
-                    d = np.hypot(x2 - x1, y2 - y1)
-                    if d < best_dist:
-                        best_dist = d
-                        best_node = node
-            visited.add(best_node)
-            length += best_dist
-            current = best_node
-        return length
 
     def executeEpisode(self):
         tsp_state = self.game.getInitState()
@@ -91,9 +61,7 @@ class Coach:
             tsp_state = self.game.getNextState(tsp_state, action)
 
         # Terminal state reached
-        final_tour_length = self.game.getTourLength(tsp_state)
-        raw_value = (self.baseline - final_tour_length) / self.baseline
-        value = np.clip(raw_value, -1, 1)
+        value = self.game.getFinalScore(tsp_state)
         # print(value)
 
         new_trainExamples = []
@@ -136,7 +104,7 @@ class Coach:
             )
 
             pmcts = MCTS(self.game, self.old_net, self.args)
-            print("examples from episode", len(trainExamples))
+            log.info("examples from episode " + str(len(trainExamples)))
             final_pi_loss, final_v_loss = self.nnet.train(trainExamples)
             nmcts = MCTS(self.game, self.nnet, self.args)
 
@@ -204,7 +172,6 @@ class Coach:
 
             # Update loss and length plot
             self.plot_loss_and_length_history()
-            self.plot_value_loss_history()
 
             if self.args.visualize:
                 rounded_len = round(best_so_far.current_length, 4)
@@ -226,107 +193,50 @@ class Coach:
             )
 
     def plot_loss_and_length_history(self):
-        """
-        Plot losses (pi and value) and tour lengths over iterations.
-        We have:
-        - iteration_pi_loss_history
-        - iteration_v_loss_history
-        - avg_lengths_new (new network)
-        - avg_lengths_old (old network)
-        - L_baseline: a fixed baseline line
-        - nn_length: nearest neighbor solution line (purple)
-        - best_tour_length: if not None, plot as another line
-        """
-
-        if len(self.iteration_pi_loss_history) == 0:
+        if len(self.avg_lengths_new) == 0 or len(self.avg_lengths_old) == 0:
             return
+        
+        iterations = np.arange(1, len(self.avg_lengths_new) + 1)
 
-        iterations = np.arange(1, len(self.iteration_pi_loss_history) + 1)
+        plt.figure(figsize=(12, 6))
 
-        plt.figure()
-        # Left axis for losses
-        ax1 = plt.gca()
-        ax1.plot(
-            iterations,
-            self.iteration_pi_loss_history,
-            label="Policy Loss",
-            color="blue",
-        )
-        ax1.plot(
-            iterations,
-            self.iteration_v_loss_history,
-            label="Value Loss",
-            color="orange",
-        )
-        ax1.set_xlabel("Iteration")
-        ax1.set_ylabel("Loss")
-        ax1.grid(True)
-        ax1.legend(loc="upper left")
+        # Plot average lengths
+        plt.subplot(1, 2, 1)
+        plt.plot(iterations, self.avg_lengths_new, label='New Network Tour Length', color='green')
+        plt.plot(iterations, self.avg_lengths_old, label='Old Network Tour Length', color='blue')
 
-        # Right axis for lengths
-        ax2 = ax1.twinx()
-        ax2.plot(
-            iterations,
-            self.avg_lengths_new,
-            label="New Network Tour Length",
-            color="green",
-        )
+        # Plot baselines
+        plt.axhline(y=self.args.NN_length, color='purple', linestyle='-.', label='Nearest Neighbor')
 
-        # Horizontal lines for references
-        L_baseline = self.args.L_baseline
-        ax2.axhline(
-            y=L_baseline,
-            color="red",
-            linestyle="--",
-            label="Baseline (Simple)",
-        )
-        # Nearest neighbor line
-        ax2.axhline(
-            y=self.nn_length,
-            color="purple",
-            linestyle="-.",
-            label="Nearest Neighbor"
-        )
-        # If best_tour_length is known, plot it too
         if self.best_tour_length is not None:
-            ax2.axhline(
-                y=self.best_tour_length,
-                color="brown",
-                linestyle=":",
-                label="Loaded Best Solution"
-            )
+            plt.axhline(y=self.best_tour_length, color='brown', linestyle=':', label='Loaded Best Solution')
 
-        ax2.set_ylabel("Tour Length")
-        ax2.legend(loc="upper right")
-
-        plt.title("Policy/Value Losses and Tour Length per Iteration")
-
-        loss_plot_path = os.path.join(
-            self.folder, "graphs", "loss_and_length_history.png"
-        )
-        plt.savefig(loss_plot_path)
-        plt.close()
-
-    def plot_value_loss_history(self):
-        """
-        Plot only the value loss over iterations separately,
-        since value loss might be smaller and we want a better scale.
-        """
-        if len(self.iteration_v_loss_history) == 0:
-            return
-
-        iterations = np.arange(1, len(self.iteration_v_loss_history) + 1)
-
-        plt.figure()
-        plt.plot(iterations, self.iteration_v_loss_history, color='orange', label="Value Loss")
-        plt.xlabel("Iteration")
-        plt.ylabel("Value Loss")
-        plt.title("Value Loss Over Iterations")
-        plt.grid(True)
+        plt.xlabel('Iteration')
+        plt.ylabel('Tour Length')
+        plt.title('Average Tour Lengths per Iteration')
         plt.legend()
 
-        value_loss_path = os.path.join(self.folder, "graphs", "value_loss_history.png")
-        plt.savefig(value_loss_path)
+        # Plot policy and value loss
+        plt.subplot(1, 2, 2)
+        ax1 = plt.gca()
+        ax1.plot(iterations, self.iteration_pi_loss_history, label='Policy Loss', color='blue')
+        ax1.set_xlabel('Iteration')
+        ax1.set_ylabel('Policy Loss', color='blue')
+        ax1.tick_params(axis='y', labelcolor='blue')
+        ax1.legend(loc='upper left')
+
+        ax2 = ax1.twinx()
+        ax2.plot(iterations, self.iteration_v_loss_history, label='Value Loss', color='orange')
+        ax2.set_ylabel('Value Loss', color='orange')
+        ax2.tick_params(axis='y', labelcolor='orange')
+        ax2.legend(loc='upper right')
+
+        plt.title('Policy and Value Losses per Iteration')
+
+        plt.tight_layout()
+        
+        loss_plot_path = os.path.join(self.folder, 'graphs', 'loss_and_length_history.png')
+        plt.savefig(loss_plot_path)
         plt.close()
 
     def evaluateNetwork(self, mcts: MCTS, name=""):

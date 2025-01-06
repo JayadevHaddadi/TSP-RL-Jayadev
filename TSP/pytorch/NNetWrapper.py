@@ -139,6 +139,7 @@ class NNetWrapper(NeuralNet):
         # Let's just return the last epoch’s losses for simplicity:
         return pi_loss_list[-1], v_loss_list[-1]
 
+
     def predict(self, state):
         self.nnet.eval()
         with torch.no_grad():

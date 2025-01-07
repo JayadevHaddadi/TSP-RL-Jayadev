@@ -16,9 +16,9 @@ def main():
         {
             "numIters": 1000,
             "numEps": 10,  # 100
-            "tempThreshold": 15,
+            "tempThreshold": 15, # not used anymore
             "maxlenOfQueue": 200000,
-            "numMCTSSims": 25,  # 25
+            "numMCTSSims": 50,  # 25
             "cpuct": 1,  # 1
             "checkpoint": "./temp/",  # Will be updated later
             "load_model": False,
@@ -55,16 +55,34 @@ def main():
 
     # Determine node coordinates and node count
     if args.read_from_file:
-        normal, node_coords = read_tsplib(args.file_name)
+        normal, node_coords = read_tsplib(args.file_name)  # normal is shape (2,)
         num_nodes = len(node_coords)
-        node_type = os.path.splitext(os.path.basename(args.file_name))[
-            0
-        ]  # e.g., 'burma14'
+        node_type = os.path.splitext(os.path.basename(args.file_name))[0]
+
+        solutions_file = "tsplib/solutions"  # Adjust path as needed
+        best_solutions = read_solutions(solutions_file)
+        problem_name = node_type
+        
+
+        best_tour_length = best_solutions.get(problem_name, None)
+        if best_tour_length is None:
+            logging.info(f"No best known solution found for {problem_name}.")
+        else:
+            logging.info(f"Best known tour length for {problem_name}: {best_tour_length}")
+
+            # Convert normal to a single float scale factor
+            scale_factor = np.max(normal)  # e.g. max(dx, dy)
+
+            # Now best_tour_length becomes a single float
+            best_tour_length = best_tour_length / scale_factor
+            logging.info(f"Best known tour length normalized: {best_tour_length}")
+            print(f"Best known tour length normalized: {best_tour_length}")
     else:
         # Define node coordinates for TSP
         num_nodes = args.num_nodes
         node_coords = np.random.rand(num_nodes, 2).tolist()  # List of (x, y) tuples
         node_type = "rand"
+        best_tour_length = None  # Or set to a large value
 
     # Construct run folder name
     run_name = f"{num_nodes}_{node_type}_{run_timestamp}"
@@ -106,26 +124,26 @@ def main():
     # game.plotTour(None, "NN Tour", run_folder, NN_tour)
 
     # Now, if reading from file, get the best known solution
-    if args.read_from_file:
-        solutions_file = "tsplib/solutions"  # Adjust the path as needed
-        best_solutions = read_solutions(solutions_file)
+    # if args.read_from_file:
+    #     solutions_file = "tsplib/solutions"  # Adjust the path as needed
+    #     best_solutions = read_solutions(solutions_file)
 
-        problem_name = os.path.splitext(os.path.basename(args.file_name))[0]
+    #     problem_name = os.path.splitext(os.path.basename(args.file_name))[0]
 
-        # Get the best known tour length
-        best_tour_length = best_solutions.get(problem_name, None)
-        if best_tour_length is None:
-            logging.info(f"No best known solution found for {problem_name}.")
-        else:
-            logging.info(
-                f"Best known tour length for {problem_name}: {best_tour_length}"
-            )
-            best_tour_length = best_tour_length/normal
-            logging.info(
-                f"Best known tour length normalized: {best_tour_length}"
-            )
-    else:
-        best_tour_length = None  # Or set to a large value
+    #     # Get the best known tour length
+    #     best_tour_length = best_solutions.get(problem_name, None)
+    #     if best_tour_length is None:
+    #         logging.info(f"No best known solution found for {problem_name}.")
+    #     else:
+    #         logging.info(
+    #             f"Best known tour length for {problem_name}: {best_tour_length}"
+    #         )
+    #         best_tour_length = best_tour_length/normal
+    #         logging.info(
+    #             f"Best known tour length normalized: {best_tour_length}"
+    #         )
+    # else:
+    #     best_tour_length = None  # Or set to a large value
 
     logging.info("Initializing Neural Network: %s...", neural_net_wrapper.__name__)
     nnet = neural_net_wrapper(game, args)

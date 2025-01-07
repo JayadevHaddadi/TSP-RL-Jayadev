@@ -52,7 +52,7 @@ def read_tsplib(filename):
     coords_array = np.array(node_coords)
     min_coords = coords_array.min(axis=0)
     max_coords = coords_array.max(axis=0)
-    normal = (max_coords - min_coords + 1e-8)
+    normal = max_coords - min_coords + 1e-8
     normalized_coords = (coords_array - min_coords) / normal
     return normal, normalized_coords.tolist()
 

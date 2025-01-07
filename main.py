@@ -21,7 +21,7 @@ def main():
             "numMCTSSims": 25,  # 25
             "cpuct": 1,  # 1
             "checkpoint": "./temp/",  # Will be updated later
-            "load_model": True,
+            "load_model": False,
             "load_folder_file": (
                 "./runs/11_rand_241231-141306/checkpoints",
                 "best.pth.tar",
@@ -32,7 +32,7 @@ def main():
             ),
             "numItersForTrainExamplesHistory": 20,
             "numEpsEval": 2,
-            "updateThreshold": 0, #0.01
+            "updateThreshold": 0,  # 0.01
             # Neural Network parameters
             "lr": 0.001,
             "dropout": 0.3,
@@ -44,9 +44,9 @@ def main():
             # Nodes
             "visualize": True,
             "read_from_file": True,
-            "file_name": "./runs/11_rand_241231-141306/coordinates.txt",
+            "file_name": "./tsplib/eil51.tsp", #"./runs/11_rand_241231-141306/coordinates.txt",
             # For Radom
-            "num_nodes": 11,
+            "num_nodes": 20,
         }
     )
 
@@ -57,7 +57,9 @@ def main():
     if args.read_from_file:
         node_coords = read_tsplib(args.file_name)
         num_nodes = len(node_coords)
-        node_type = os.path.splitext(os.path.basename(args.file_name))[0]  # e.g., 'burma14'
+        node_type = os.path.splitext(os.path.basename(args.file_name))[
+            0
+        ]  # e.g., 'burma14'
     else:
         # Define node coordinates for TSP
         num_nodes = args.num_nodes
@@ -100,7 +102,7 @@ def main():
     save_node_coordinates(node_coords, node_coords_file, args.NN_length, args.NN_tour)
     logging.info("NN Length: %.2f", args.NN_length)  # Logging with formatting
     logging.info("NN Tour: %s", args.NN_tour)  # Logging list directly
-    game.plotTour(title="NN Tour", save_path=run_folder, input_tour=args.NN_tour)
+    game.plotTour(title="NN Tour - len: " +str(args.NN_length), save_path=os.path.join(run_folder, "NN_sol_len_"+str(args.NN_length)), input_tour=args.NN_tour)
     # game.plotTour(None, "NN Tour", run_folder, NN_tour)
 
     # Now, if reading from file, get the best known solution

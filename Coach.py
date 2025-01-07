@@ -47,28 +47,36 @@ class Coach:
             )
 
     def executeEpisode(self):
+        """
+        Execute one self-play episode, storing (state, pi, target_value) for each step.
+        Previously, 'value' was the final negative tour length or final cost.
+        Now, 'value' = leftover_distance = final_tour_length - state's current_length.
+        """
         tsp_state = self.game.getInitState()
-
         trajectory = []
 
-        # Self-play until terminal or maxSteps (maxSteps not currently used)
+        # While not terminal, pick actions from MCTS
         while not self.game.isTerminal(tsp_state):
             pi = self.mcts.getActionProb(tsp_state, temp=1)
-            # print(pi)
+            # Store the partial state and the policy
             trajectory.append((tsp_state, pi))
 
             action = np.random.choice(len(pi), p=pi)
             tsp_state = self.game.getNextState(tsp_state, action)
 
-        # Terminal state reached
-        value = self.game.getFinalScore(tsp_state)
-        # print(value)
+        # Now terminal
+        final_tour_length = self.game.getTourLength(tsp_state)
 
+        # For each partial state st in the trajectory:
+        # leftover_distance = final_tour_length - st.current_length
         new_trainExamples = []
-        for st, pi in trajectory:
-            new_trainExamples.append((st, pi, value))
+        for (st, pi) in trajectory:
+            leftover_dist = final_tour_length - st.current_length
+            # We keep it unbounded or we can apply no tanh => direct MSE
+            new_trainExamples.append((st, pi, leftover_dist))
 
         return new_trainExamples
+
 
     def learn(self):
         for i in range(1, self.args.numIters + 1):
@@ -235,7 +243,7 @@ class Coach:
 
         plt.tight_layout()
         
-        loss_plot_path = os.path.join(self.folder, 'graphs', 'loss_and_length_history.png')
+        loss_plot_path = os.path.join(self.folder, 'loss_and_length_history.png')
         plt.savefig(loss_plot_path)
         plt.close()
 

@@ -73,7 +73,6 @@ class NNetWrapper(NeuralNet):
     def train(self, examples):
         optimizer = optim.Adam(self.nnet.parameters(), lr=self.args.lr)
 
-        # We'll store only last epoch's average losses for this iteration
         pi_loss_list = []
         v_loss_list = []
 
@@ -96,6 +95,7 @@ class NNetWrapper(NeuralNet):
                 )
                 batch_examples = [examples[j] for j in sample_ids]
 
+                # Each example is (partial_state, target_pi, leftover_distance)
                 states, target_pis, target_vs = zip(*batch_examples)
 
                 node_features_list = []
@@ -115,9 +115,10 @@ class NNetWrapper(NeuralNet):
                     target_pis, target_vs = target_pis.cuda(), target_vs.cuda()
 
                 out_pi, out_v = self.nnet(node_features, adjacency)
+                # out_v is leftover distance the network predicts
 
                 l_pi = self.loss_pi(target_pis, out_pi)
-                l_v = self.loss_v(target_vs, out_v)
+                l_v = self.loss_v(target_vs, out_v)  # MSE between leftover_distance and predicted leftover
                 total_loss = l_pi + l_v
 
                 pi_losses.update(l_pi.item(), node_features.size(0))
@@ -131,13 +132,11 @@ class NNetWrapper(NeuralNet):
                 )
                 optimizer.step()
 
-            # After last epoch, store the final epoch's avg loss
             pi_loss_list.append(pi_losses.avg)
             v_loss_list.append(v_losses.avg)
 
-        # Return final epoch's averages (only last epoch or average across epochs?)
-        # Let's just return the last epoch’s losses for simplicity:
         return pi_loss_list[-1], v_loss_list[-1]
+
 
 
     def predict(self, state):

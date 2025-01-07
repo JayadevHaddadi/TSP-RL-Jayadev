@@ -53,14 +53,6 @@ class MCTS:
 
     def search(self, tsp_state: TSPState):
         s = self.game.uniqueStringRepresentation(tsp_state)
-        # Dirichlet Noise for Better Exploration: AlphaZero adds Dirichlet noise
-        # to Ps[s] at the root node to ensure initial exploration of multiple moves rather
-        # than getting stuck too early. This code doesn't seem to add such noise. Adding:
-
-        # python
-        # Copy code
-        # if is_root_node:
-        #     Ps[s] = (1 - noise_alpha)*Ps[s] + noise_alpha*dirichlet_noise
 
         if s not in self.Es:
             if self.game.isTerminal(tsp_state): # Terminal
@@ -74,9 +66,15 @@ class MCTS:
 
         if s not in self.Ps:
             # Leaf node
-            self.Ps[s], v = self.nnet.predict(tsp_state)
-            valids = self.game.getValidMoves(tsp_state)
+            self.Ps[s], leftover_v = self.nnet.predict(tsp_state)
+            # leftover_v = how much distance left to complete the path
+            # total cost = tsp_state.current_length + leftover_v
+            # MCTS is maximizing Q => we store Q as - total cost
+            # i.e. Qvalue = - (cost_so_far + leftover_v)
+            total_cost = tsp_state.current_length + leftover_v
+            v = -total_cost
 
+            valids = self.game.getValidMoves(tsp_state)
             self.Ps[s] = self.Ps[s] * valids
             sum_Ps_s = np.sum(self.Ps[s])
             if sum_Ps_s > 0:
@@ -89,6 +87,7 @@ class MCTS:
             self.Vs[s] = valids
             self.Ns[s] = 0
             return v
+
 
         # Internal Node
         valids = self.Vs[s]

@@ -102,7 +102,6 @@ def save_node_coordinates(node_coords, filename, NN_length, NN_tour):
             f.write(f"{idx} {x} {y}\n")
         f.write("EOF\n")
 
-
 def compute_nn_tour(coords):
     num_nodes = len(coords)
     visited = {0}

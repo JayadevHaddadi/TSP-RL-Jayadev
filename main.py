@@ -55,7 +55,7 @@ def main():
 
     # Determine node coordinates and node count
     if args.read_from_file:
-        node_coords = read_tsplib(args.file_name)
+        normal, node_coords = read_tsplib(args.file_name)
         num_nodes = len(node_coords)
         node_type = os.path.splitext(os.path.basename(args.file_name))[
             0
@@ -102,7 +102,7 @@ def main():
     save_node_coordinates(node_coords, node_coords_file, args.NN_length, args.NN_tour)
     logging.info("NN Length: %.2f", args.NN_length)  # Logging with formatting
     logging.info("NN Tour: %s", args.NN_tour)  # Logging list directly
-    game.plotTour(title="NN Tour - len: " +str(args.NN_length), save_path=os.path.join(run_folder, "NN_sol_len_"+str(args.NN_length)), input_tour=args.NN_tour)
+    game.plotTour(title="NN Tour - len: " +str(args.NN_length), save_path=os.path.join(run_folder, "NN_sol_len_"+str(args.NN_length)) + ".png", input_tour=args.NN_tour)
     # game.plotTour(None, "NN Tour", run_folder, NN_tour)
 
     # Now, if reading from file, get the best known solution
@@ -119,6 +119,10 @@ def main():
         else:
             logging.info(
                 f"Best known tour length for {problem_name}: {best_tour_length}"
+            )
+            best_tour_length = best_tour_length/normal
+            logging.info(
+                f"Best known tour length normalized: {best_tour_length}"
             )
     else:
         best_tour_length = None  # Or set to a large value

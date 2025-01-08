@@ -15,12 +15,11 @@ def main():
     args = dotdict(
         {
             "numIters": 1000,
-            "numEps": 10,  # 100
+            "numEps": 15,  # 100
             "tempThreshold": 15, # not used anymore
             "maxlenOfQueue": 200000,
             "numMCTSSims": 50,  # 25
             "cpuct": 1,  # 1
-            "checkpoint": "./temp/",  # Will be updated later
             "load_model": False,
             "load_folder_file": (
                 "./runs/11_rand_241231-141306/checkpoints",
@@ -30,20 +29,19 @@ def main():
                 "./runs/11_rand_241231-141306/checkpoints",
                 "checkpoint",
             ),
-            "numItersForTrainExamplesHistory": 20,
+            "numItersForTrainExamplesHistory": 40,
             "numEpsEval": 2,
-            "updateThreshold": 0,  # 0.01
             # Neural Network parameters
             "lr": 0.001,
             "dropout": 0.3,
-            "epochs": 5,  # 10
+            "epochs": 10,  # 10
             "batch_size": 64,
             "cuda": torch.cuda.is_available(),
             "num_channels": 128,
             "max_gradient_norm": 5.0,
             # Nodes
             "visualize": True,
-            "read_from_file": True,
+            "read_from_file": False,
             "file_name": "./tsplib/eil51.tsp", #"./runs/11_rand_241231-141306/coordinates.txt",
             # For Radom
             "num_nodes": 20,
@@ -85,7 +83,7 @@ def main():
         best_tour_length = None  # Or set to a large value
 
     # Construct run folder name
-    run_name = f"{num_nodes}_{node_type}_{run_timestamp}"
+    run_name = f"{run_timestamp}_{num_nodes}_{node_type}"
     run_folder = os.path.join("runs", run_name)
     os.makedirs(run_folder, exist_ok=True)
 

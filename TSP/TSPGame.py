@@ -76,32 +76,14 @@ class TSPGame:
         return state.get_tour_length()
 
     def uniqueStringRepresentation(self, state: TSPState):
+        """
+        Return the string representation of the partial tour exactly 
+        as stored in state.tour, with no rotation or reversal.
+        """
         tour = state.tour
-
-        # If the tour is empty, just return an empty string to avoid errors:
         if not tour:
             return ""
-
-        # 1) Find the smallest node in the partial tour.
-        # This ensures a consistent "rotation" around the lowest ID node, not necessarily '0'.
-        smallest_node = min(tour)
-        idx_smallest = tour.index(smallest_node)
-
-        # 2) Rotate the tour so that 'smallest_node' is at the front.
-        rotated = tour[idx_smallest:] + tour[:idx_smallest]
-
-        # 3) Also consider the reversed version for full canonical check.
-        reversed_tour = list(reversed(rotated))
-
-        forward_str = ",".join(map(str, rotated))
-        reverse_str = ",".join(map(str, reversed_tour))
-
-        # 4) Compare lexicographically, pick the smaller representation
-        if reverse_str < forward_str:
-            return reverse_str
-        else:
-            return forward_str
-
+        return ",".join(map(str, tour))
 
     def display(self, state: TSPState):
         log.info(f"Tour: {state.tour}")

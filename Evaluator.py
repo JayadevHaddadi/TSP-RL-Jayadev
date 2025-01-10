@@ -26,7 +26,7 @@ class Evaluator:
 
     def evaluate(self):
         # Initialize state
-        state = self.game.getRandomState()
+        state = self.game.getInitState()
         step = 0
         max_steps = self.args.maxSteps
 
@@ -93,7 +93,7 @@ args = dotdict(
         "maxlenOfQueue": 200000,
         "numMCTSSims": 25,
         "cpuct": 1,
-        "checkpoint": "./runs/6_nodes_random_20241206-163000/checkpoints",  # Will be updated later
+        "checkpoint": "./runs/250108-154357_20_rand/checkpoints",  # Will be updated later
         # runs/6_nodes_random_20241205-104555/checkpoints
         "load_model": False,
         "load_folder_file": ("./temp", "best.pth.tar"),
@@ -114,7 +114,7 @@ args = dotdict(
         "visualize": True,
         "read_from_file": False,
         "file_name": "tsplib/burma14.tsp",
-        "num_nodes": 6,
+        "num_nodes": 20,
     }
 )
 

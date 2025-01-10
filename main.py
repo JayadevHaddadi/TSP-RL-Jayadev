@@ -15,18 +15,20 @@ def main():
     args = dotdict(
         {
             "numIters": 1000,
-            "numEps": 15,  # 100
+            "numEps": 10,  # 100
             "tempThreshold": 15, # not used anymore
             "maxlenOfQueue": 200000,
             "numMCTSSims": 50,  # 25
+            "numMCTSSimsEval": 100,  # 25
+            "preTrainingEvalEpisodes": 3,
             "cpuct": 1,  # 1
             "load_model": False,
             "load_folder_file": (
-                "./runs/11_rand_241231-141306/checkpoints",
+                "./runs/250109-124918_20_rand/checkpoints",
                 "best.pth.tar",
             ),
             "load_examples_folder_file": (
-                "./runs/11_rand_241231-141306/checkpoints",
+                "./runs/250109-124918_20_rand/checkpoints",
                 "checkpoint",
             ),
             "numItersForTrainExamplesHistory": 40,
@@ -34,7 +36,7 @@ def main():
             # Neural Network parameters
             "lr": 0.001,
             "dropout": 0.3,
-            "epochs": 10,  # 10
+            "epochs": 5,  # 10
             "batch_size": 64,
             "cuda": torch.cuda.is_available(),
             "num_channels": 128,
@@ -119,29 +121,6 @@ def main():
     logging.info("NN Length: %.2f", args.NN_length)  # Logging with formatting
     logging.info("NN Tour: %s", args.NN_tour)  # Logging list directly
     game.plotTour(title="NN Tour - len: " +str(args.NN_length), save_path=os.path.join(run_folder, "NN_sol_len_"+str(args.NN_length)) + ".png", input_tour=args.NN_tour)
-    # game.plotTour(None, "NN Tour", run_folder, NN_tour)
-
-    # Now, if reading from file, get the best known solution
-    # if args.read_from_file:
-    #     solutions_file = "tsplib/solutions"  # Adjust the path as needed
-    #     best_solutions = read_solutions(solutions_file)
-
-    #     problem_name = os.path.splitext(os.path.basename(args.file_name))[0]
-
-    #     # Get the best known tour length
-    #     best_tour_length = best_solutions.get(problem_name, None)
-    #     if best_tour_length is None:
-    #         logging.info(f"No best known solution found for {problem_name}.")
-    #     else:
-    #         logging.info(
-    #             f"Best known tour length for {problem_name}: {best_tour_length}"
-    #         )
-    #         best_tour_length = best_tour_length/normal
-    #         logging.info(
-    #             f"Best known tour length normalized: {best_tour_length}"
-    #         )
-    # else:
-    #     best_tour_length = None  # Or set to a large value
 
     logging.info("Initializing Neural Network: %s...", neural_net_wrapper.__name__)
     nnet = neural_net_wrapper(game, args)
@@ -165,7 +144,6 @@ def main():
 
     logging.info("Starting the learning process HURRAY")
     c.learn()
-
 
 if __name__ == "__main__":
     main()

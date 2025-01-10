@@ -36,8 +36,62 @@ class Coach:
             writer = csv.writer(f)
             writer.writerow(["Iteration", "Epoch", "Batch", "Policy Loss", "Value Loss"])
 
+        # --- Optionally run a pre-training evaluation of the uninitialized or loaded model ---
+        self.args.preTrainingEvalEpisodes = 3  # or however many you'd like
+        self.preTrainingEval()
+
+    def preTrainingEval(self):
+        """
+        Evaluate the current network before any training.
+        For instance, run a handful of episodes with random start nodes
+        to see how the initial net does, and plot each resulting tour.
+        """
+        log.info("=== Pre-Training Evaluation ===")
+        # We'll store the original MCTS sims value so we can revert after
+        original_sims = self.args.numMCTSSims
+
+        total_length = 0.0
+        for ep in range(self.args.preTrainingEvalEpisodes):
+            # Possibly use a higher number of MCTS sims for evaluation
+            self.args.numMCTSSims = self.args.numMCTSSimsEval
+
+            start_node = random.randint(0, self.game.num_nodes - 1)
+            log.info(f"Pre-Training Eval Episode {ep+1}/{self.args.preTrainingEvalEpisodes}, Start Node = {start_node}")
+
+            temp_mcts = MCTS(self.game, self.nnet, self.args)
+            state = self.game.getInitEvalState(start_node)
+
+            # Perform a full episode from this start node
+            while not self.game.isTerminal(state):
+                pi = temp_mcts.getActionProb(state, temp=0)
+                valid_moves = self.game.getValidMoves(state)
+                pi = pi * valid_moves
+                if np.sum(pi) == 0:
+                    # No valid moves remain
+                    break
+                pi = pi / np.sum(pi)
+                action = np.argmax(pi)
+                state = self.game.getNextState(state, action)
+
+            # Revert MCTS sims
+            self.args.numMCTSSims = original_sims
+
+            # Summation for average
+            length = state.current_length
+            total_length += length
+            log.info(f"Episode {ep+1} final length = {length}")
+
+            # --- Plot the final tour ---
+            # We'll name the file something like 'pretrain_eval_ep1_lenXXX.png'
+            file_basename = f"Iter_0000_{ep+1}_len{round(length,2)}.png"
+            save_path = os.path.join(self.folder, "graphs", file_basename)
+            self.game.plotTour(state, title=f"PreTrainEval Ep {ep+1} (Len={round(length,2)})", save_path=save_path)
+
+        avg_len = total_length / self.args.preTrainingEvalEpisodes
+        log.info(f"--- Average Tour Length in Pre-Training Eval: {avg_len} ---")
+
+
     def executeEpisode(self):
-        # randomize_start=True so each training run starts from a random node
         tsp_state = self.game.getInitState(randomize_start=True)
         trajectory = []
         while not self.game.isTerminal(tsp_state):
@@ -51,7 +105,6 @@ class Coach:
             leftover_dist = final_tour_length - st.current_length
             new_trainExamples.append((st, pi, leftover_dist))
         return new_trainExamples
-
 
     def learn(self):
         for i in range(1, self.args.numIters + 1):
@@ -121,7 +174,6 @@ class Coach:
             try:
                 with open(self.losses_file, "a", newline="") as f:
                     writer = csv.writer(f)
-                    # We'll record iteration-level data
                     writer.writerow(
                         [
                             i,
@@ -162,30 +214,26 @@ class Coach:
                 f"Iteration {iteration}: Old Avg Length = {old_len}, New Avg Length = {new_len}"
             )
 
-    def plot_loss_and_length_history(self): 
+    def plot_loss_and_length_history(self):
         if len(self.avg_lengths_new) == 0 or len(self.avg_lengths_old) == 0:
             return
-        
         iterations = np.arange(1, len(self.avg_lengths_new) + 1)
 
         plt.figure(figsize=(12, 6))
 
-        # --- Left Plot: Average Tour Lengths ---
+        # Left: Tour Length
         plt.subplot(1, 2, 1)
         plt.plot(iterations, self.avg_lengths_new, label='New Network Tour Length', color='green')
         plt.plot(iterations, self.avg_lengths_old, label='Old Network Tour Length', color='blue')
-
-        # Optionally plot your nearest neighbor solution or best known solution as horizontal lines
         plt.axhline(y=self.args.NN_length, color='purple', linestyle='-.', label='Nearest Neighbor')
         if self.best_tour_length is not None:
             plt.axhline(y=self.best_tour_length, color='brown', linestyle=':', label='Loaded Best Solution')
-
         plt.xlabel('Iteration')
         plt.ylabel('Tour Length')
         plt.title('Average Tour Lengths per Iteration')
         plt.legend()
 
-        # --- Right Plot: Policy and Value Losses ---
+        # Right: Policy + Value Loss
         plt.subplot(1, 2, 2)
         ax1 = plt.gca()
         ax1.plot(iterations, self.iteration_pi_loss_history, label='Policy Loss', color='blue')
@@ -193,30 +241,20 @@ class Coach:
         ax1.set_ylabel('Policy Loss', color='blue')
         ax1.tick_params(axis='y', labelcolor='blue')
         ax1.legend(loc='upper left')
-
-        # Create a secondary Y-axis for value loss
         ax2 = ax1.twinx()
         ax2.plot(iterations, self.iteration_v_loss_history, label='Value Loss', color='orange')
         ax2.set_ylabel('Value Loss', color='orange')
         ax2.tick_params(axis='y', labelcolor='orange')
-        # **Key line to enable log scale for value loss:**
         ax2.set_yscale('log')
-
         ax2.legend(loc='upper right')
         plt.title('Policy and Value Losses per Iteration')
 
         plt.tight_layout()
-        
         loss_plot_path = os.path.join(self.folder, 'loss_and_length_history.png')
         plt.savefig(loss_plot_path)
         plt.close()
 
-
     def evaluateNetwork(self, mcts: MCTS, start_node=0, name=""):
-        """
-        Evaluate the network from a given start node so old and new networks
-        get exactly the same test environment.
-        """
         tsp_state = self.game.getInitEvalState(start_node)
         for _ in range(self.game.getActionSize()):
             if self.game.isTerminal(tsp_state):
@@ -252,8 +290,8 @@ class Coach:
 
     def loadTrainExamples(self):
         modelFile = os.path.join(
-            self.args.load_examples_folder_file[0],
-            self.args.load_examples_folder_file[1],
+            self.args.load_folder_file[0],
+            self.args.load_folder_file[1],
         )
         examplesFile = modelFile + ".examples"
         if not os.path.isfile(examplesFile):

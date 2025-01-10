@@ -1,8 +1,5 @@
 import numpy as np
 
-###################################
-# TSPState Class
-###################################
 class TSPState:
     def __init__(self, num_nodes, node_coordinates):
         self.num_nodes = num_nodes
@@ -11,22 +8,6 @@ class TSPState:
         self.unvisited = np.ones(num_nodes, dtype=int)
         self.unvisited[0] = 0
         self.current_length = 0.0
-
-    def set_state(self, tour):
-        """
-        Set the current partial tour state.
-        tour: list of nodes representing the partial tour
-        """
-        self.tour = list(tour)
-        visited_set = set(tour)
-        self.unvisited = set(range(self.num_nodes)) - visited_set
-        self.current_length = self.get_tour_length()
-
-    def get_state(self):
-        """
-        Return the current partial tour as np.array.
-        """
-        return np.array(self.tour)
 
     def execute_action(self, action):
         """

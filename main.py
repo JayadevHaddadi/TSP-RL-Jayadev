@@ -16,12 +16,13 @@ def main():
             "numIters": 1000,
             "numEps": 10,
             "maxlenOfQueue": 200000,
-            "numMCTSSims": 25,
-            "numMCTSSimsEval": 50,
+            "numMCTSSims": 50,
+            "numMCTSSimsEval": 100,
             "coordinatesToEvaluate": 5,
             "plot_all_eval_sets_interval": 10,
             "cpuct": 1,
             "load_model": False,
+            "augmentationFactor": 20,
             "numItersForTrainExamplesHistory": 20,
             # Neural Network parameters
             "lr": 0.001,
@@ -34,7 +35,7 @@ def main():
             # Node options
             "visualize": True,
             "read_from_file": False,
-            "num_nodes": 10,
+            "num_nodes": 20,
             # Possibly more arguments
         }
     )
@@ -44,14 +45,11 @@ def main():
     run_folder = os.path.join("runs", run_name)
     os.makedirs(run_folder, exist_ok=True)
 
-    # Create subfolders
-    eval_folder = os.path.join(run_folder, "evaluation")
-    os.makedirs(eval_folder, exist_ok=True)
-
+    # Subfolder for checkpoints
     nn_folder = os.path.join(run_folder, "checkpoints")
     os.makedirs(nn_folder, exist_ok=True)
 
-    # *** IMPORTANT: Assign to args.checkpoint BEFORE using Coach or saveTrainExamples() ***
+    # Set up checkpoint path
     args.checkpoint = nn_folder
 
     log_file = os.path.join(run_folder, "log.txt")
@@ -60,26 +58,29 @@ def main():
     logging.info(f"Run folder: {run_folder}")
     logging.info("CUDA Available: %s", torch.cuda.is_available())
 
-    # Create initial TSPGame
+    # Create initial TSPGame with random coordinates
     num_nodes = args.num_nodes
     init_coords = np.random.rand(num_nodes, 2).tolist()
     game = TSPGame(num_nodes, init_coords, args)
     game.node_type = "rand"
 
+    # Suppose no known best solution
     best_tour_length = None
 
-    # Suppose you build coords_for_eval for stable evaluation:
+    # Build coords_for_eval for stable evaluation
     coords_for_eval = []
-    # ... create or store random coords for evaluation
-    # e.g.:
+    nn_lengths_for_eval = []  # <-- We will store the nearest–neighbor lengths here
     for _ in range(args.coordinatesToEvaluate):
         cset = np.random.rand(num_nodes, 2).tolist()
         coords_for_eval.append(cset)
+        # Compute NN length for this cset
+        nn_len, _ = compute_nn_tour(cset)
+        nn_lengths_for_eval.append(nn_len)
 
     # Initialize your neural network
     nnet = neural_net_wrapper(game, args)
 
-    # Create the Coach with all the needed arguments
+    # Create the Coach with coords_for_eval and the associated NN lengths
     c = Coach(
         game=game,
         nnet=nnet,
@@ -87,6 +88,7 @@ def main():
         best_tour_length=best_tour_length,
         folder=run_folder,
         coords_for_eval=coords_for_eval,
+        nn_lengths_for_eval=nn_lengths_for_eval
     )
 
     # Run training

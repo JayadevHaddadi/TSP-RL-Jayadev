@@ -11,27 +11,44 @@ class TSPState:
 
     def execute_action(self, action):
         """
-        Action = node ID directly.
+        Action = node ID (chosen_node).
         unvisited[node] = 1 means node is unvisited.
         """
         chosen_node = action
         if self.unvisited[chosen_node] != 1:
             raise ValueError(f"Chosen action {chosen_node} is not unvisited.")
 
+        # 1) Add the chosen node
         from_node = self.tour[-1]
         to_node = chosen_node
         dist = self.distance(from_node, to_node)
         self.current_length += dist
         self.tour.append(chosen_node)
-        self.unvisited[chosen_node] = 0  # Mark chosen_node as visited
+        self.unvisited[chosen_node] = 0
 
-        # If all visited except the start, finalize the tour by closing the loop
-        # Check if no unvisited remain:
-        if self.is_terminal():
+        # 2) Check how many unvisited remain
+        remaining_unvisited = np.sum(self.unvisited)
+        if remaining_unvisited == 1:
+            # Exactly one node remains, so automatically add it
+            last_node = np.where(self.unvisited == 1)[0][0]
+            dist_2 = self.distance(self.tour[-1], last_node)
+            self.current_length += dist_2
+            self.tour.append(last_node)
+            self.unvisited[last_node] = 0
+
+            # Now no unvisited remain => close the loop
             start_node = self.tour[0]
             end_node = self.tour[-1]
             closing_dist = self.distance(end_node, start_node)
             self.current_length += closing_dist
+        
+        elif remaining_unvisited == 0:
+            raise Exception("Should never have 0 remaining nodes after doing an action")
+            # Already terminal if we just took the last node
+            # start_node = self.tour[0]
+            # end_node = self.tour[-1]
+            # closing_dist = self.distance(end_node, start_node)
+            # self.current_length += closing_dist
 
     def is_terminal(self):
         # Terminal if sum of unvisited = 0 (no unvisited nodes)

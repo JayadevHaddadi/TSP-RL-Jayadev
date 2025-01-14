@@ -43,7 +43,6 @@ class TSPGame:
         s.current_length = 0.0
         return s
 
-
     def getNumberOfNodes(self):
         return self.num_nodes
 

@@ -10,140 +10,88 @@ from TSP.pytorch.NNetWrapper import NNetWrapper as neural_net_wrapper
 from Coach import Coach
 from utils import *
 
-
 def main():
     args = dotdict(
         {
             "numIters": 1000,
-            "numEps": 10,  # 100
-            "tempThreshold": 15, # not used anymore
+            "numEps": 10,
             "maxlenOfQueue": 200000,
-            "numMCTSSims": 50,  # 25
-            "numMCTSSimsEval": 100,  # 25
-            "preTrainingEvalEpisodes": 3,
-            "cpuct": 1,  # 1
+            "numMCTSSims": 25,
+            "numMCTSSimsEval": 50,
+            "coordinatesToEvaluate": 5,
+            "plot_all_eval_sets_interval": 10,
+            "cpuct": 1,
             "load_model": False,
-            "load_folder_file": (
-                "./runs/250109-124918_20_rand/checkpoints",
-                "best.pth.tar",
-            ),
-            "load_examples_folder_file": (
-                "./runs/250109-124918_20_rand/checkpoints",
-                "checkpoint",
-            ),
-            "numItersForTrainExamplesHistory": 40,
-            "numEpsEval": 2,
+            "numItersForTrainExamplesHistory": 20,
             # Neural Network parameters
             "lr": 0.001,
             "dropout": 0.3,
-            "epochs": 5,  # 10
+            "epochs": 5,
             "batch_size": 64,
             "cuda": torch.cuda.is_available(),
             "num_channels": 128,
             "max_gradient_norm": 5.0,
-            # Nodes
+            # Node options
             "visualize": True,
             "read_from_file": False,
-            "file_name": "./tsplib/eil51.tsp", #"./runs/11_rand_241231-141306/coordinates.txt",
-            # For Radom
-            "num_nodes": 20,
+            "num_nodes": 10,
+            # Possibly more arguments
         }
     )
 
-    # Set up run timestamp
     run_timestamp = datetime.now().strftime("%y%m%d-%H%M%S")
-
-    # Determine node coordinates and node count
-    if args.read_from_file:
-        normal, node_coords = read_tsplib(args.file_name)  # normal is shape (2,)
-        num_nodes = len(node_coords)
-        node_type = os.path.splitext(os.path.basename(args.file_name))[0]
-
-        solutions_file = "tsplib/solutions"  # Adjust path as needed
-        best_solutions = read_solutions(solutions_file)
-        problem_name = node_type
-        
-
-        best_tour_length = best_solutions.get(problem_name, None)
-        if best_tour_length is None:
-            logging.info(f"No best known solution found for {problem_name}.")
-        else:
-            logging.info(f"Best known tour length for {problem_name}: {best_tour_length}")
-
-            # Convert normal to a single float scale factor
-            scale_factor = np.max(normal)  # e.g. max(dx, dy)
-
-            # Now best_tour_length becomes a single float
-            best_tour_length = best_tour_length / scale_factor
-            logging.info(f"Best known tour length normalized: {best_tour_length}")
-            print(f"Best known tour length normalized: {best_tour_length}")
-    else:
-        # Define node coordinates for TSP
-        num_nodes = args.num_nodes
-        node_coords = np.random.rand(num_nodes, 2).tolist()  # List of (x, y) tuples
-        node_type = "rand"
-        best_tour_length = None  # Or set to a large value
-
-    # Construct run folder name
-    run_name = f"{run_timestamp}_{num_nodes}_{node_type}"
+    run_name = f"{run_timestamp}_{args.num_nodes}_rand"
     run_folder = os.path.join("runs", run_name)
     os.makedirs(run_folder, exist_ok=True)
 
     # Create subfolders
-    graphs_folder = os.path.join(run_folder, "graphs")
-    os.makedirs(graphs_folder, exist_ok=True)
+    eval_folder = os.path.join(run_folder, "evaluation")
+    os.makedirs(eval_folder, exist_ok=True)
 
     nn_folder = os.path.join(run_folder, "checkpoints")
     os.makedirs(nn_folder, exist_ok=True)
 
-    # Update args.checkpoint to point to nn_folder
+    # *** IMPORTANT: Assign to args.checkpoint BEFORE using Coach or saveTrainExamples() ***
     args.checkpoint = nn_folder
 
-    # Set up logging
     log_file = os.path.join(run_folder, "log.txt")
     setup_logging(log_file)
 
-    # Now proceed with the rest of the main function
-    logging.info("CUDA Available: %s", torch.cuda.is_available())
     logging.info(f"Run folder: {run_folder}")
+    logging.info("CUDA Available: %s", torch.cuda.is_available())
 
-    logging.info("Initializing %s...", TSPGame.__name__)
-    game = TSPGame(
-        num_nodes, node_coords, args
-    )  # Initialize TSP game with node coordinates
-    game.node_type = node_type  # Add node_type attribute to game
-    game.num_nodes = num_nodes
+    # Create initial TSPGame
+    num_nodes = args.num_nodes
+    init_coords = np.random.rand(num_nodes, 2).tolist()
+    game = TSPGame(num_nodes, init_coords, args)
+    game.node_type = "rand"
 
-    # Save node coordinates to a file in the run folder
-    node_coords_file = os.path.join(run_folder, "coordinates.txt")
-    args.NN_length, args.NN_tour = compute_nn_tour(node_coords)
-    save_node_coordinates(node_coords, node_coords_file, args.NN_length, args.NN_tour)
-    logging.info("NN Length: %.2f", args.NN_length)  # Logging with formatting
-    logging.info("NN Tour: %s", args.NN_tour)  # Logging list directly
-    game.plotTour(title="NN Tour - len: " +str(args.NN_length), save_path=os.path.join(run_folder, "NN_sol_len_"+str(args.NN_length)) + ".png", input_tour=args.NN_tour)
+    best_tour_length = None
 
-    logging.info("Initializing Neural Network: %s...", neural_net_wrapper.__name__)
+    # Suppose you build coords_for_eval for stable evaluation:
+    coords_for_eval = []
+    # ... create or store random coords for evaluation
+    # e.g.:
+    for _ in range(args.coordinatesToEvaluate):
+        cset = np.random.rand(num_nodes, 2).tolist()
+        coords_for_eval.append(cset)
+
+    # Initialize your neural network
     nnet = neural_net_wrapper(game, args)
 
-    if args.load_model:
-        logging.info(
-            'Loading checkpoint "%s/%s"...',
-            args.load_folder_file[0],
-            args.load_folder_file[1],
-        )
-        nnet.load_checkpoint(args.load_folder_file[0], args.load_folder_file[1])
-    else:
-        logging.warning("Not loading a checkpoint! Starting from scratch.")
+    # Create the Coach with all the needed arguments
+    c = Coach(
+        game=game,
+        nnet=nnet,
+        args=args,
+        best_tour_length=best_tour_length,
+        folder=run_folder,
+        coords_for_eval=coords_for_eval,
+    )
 
-    logging.info("Initializing the Coach...")
-    c = Coach(game, nnet, args, best_tour_length=best_tour_length, folder=run_folder)
-
-    if args.load_model:
-        logging.info("Loading training examples from file...")
-        c.loadTrainExamples()
-
-    logging.info("Starting the learning process HURRAY")
+    # Run training
     c.learn()
+
 
 if __name__ == "__main__":
     main()

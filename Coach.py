@@ -1,117 +1,160 @@
 import logging
 import os
 import random
-import sys
+import csv
 from pickle import Pickler, Unpickler
 from random import shuffle
+
 import numpy as np
 from tqdm import tqdm
+import matplotlib
 import matplotlib.pyplot as plt
-import csv
 
 from MCTS import MCTS
 from TSP.pytorch.NNetWrapper import NNetWrapper
 from TSP.TSPGame import TSPGame
+from utils import *
 
 log = logging.getLogger(__name__)
 
 class Coach:
-    def __init__(self, game: TSPGame, nnet: NNetWrapper, args, best_tour_length=None, folder=None):
+    def __init__(
+        self, 
+        game: TSPGame,
+        nnet: NNetWrapper,
+        args,
+        best_tour_length=None,
+        folder=None,
+        coords_for_eval=None,
+        nn_lengths_for_eval=None,
+    ):
+        """
+        :param coords_for_eval: A list of coordinate sets for stable evaluation.
+        :param nn_lengths_for_eval: If you have nearest-neighbor solutions for each coords_for_eval,
+                                    pass them in a list of the same length. We'll use them as horizontal lines
+                                    in the multi-subplot chart. If not, pass None or an empty list.
+        """
         self.game = game
         self.nnet = nnet
-        self.old_net = nnet.__class__(game, args)
         self.args = args
+        self.folder = folder or "."
+
+        # Possibly known best from TSPLIB
+        self.best_tour_length = best_tour_length
+
+        # For stable evaluation
+        self.coords_for_eval = coords_for_eval or []
+        self.nn_lengths_for_eval = nn_lengths_for_eval or []
+
+        # We'll store final length per iteration *per evaluation set* in a 2D structure:
+        # shape (n_eval_sets, n_iterations)
+        self.eval_set_lengths_history = []  # Will append an array of size n_eval_sets each iteration.
+
         self.mcts = MCTS(self.game, self.nnet, self.args)
         self.trainExamplesHistory = []
-        self.best_tour_length = best_tour_length
-        self.folder = folder
 
+        # Track best average length across stable sets
+        self.best_avg_length = float('inf')
+
+        # Logging for losses
         self.iteration_pi_loss_history = []
         self.iteration_v_loss_history = []
-        self.avg_lengths_new = []
-        self.avg_lengths_old = []
+        self.eval_avg_length_history = []
 
+        # We'll store the large chart of policy/value losses in the main run folder
         self.losses_file = os.path.join(self.folder, "losses.csv")
         with open(self.losses_file, "w", newline="") as f:
             writer = csv.writer(f)
             writer.writerow(["Iteration", "Epoch", "Batch", "Policy Loss", "Value Loss"])
 
-        # --- Optionally run a pre-training evaluation of the uninitialized or loaded model ---
-        self.args.preTrainingEvalEpisodes = 3  # or however many you'd like
+        # Optionally run a pre-training eval
         self.preTrainingEval()
 
     def preTrainingEval(self):
         """
-        Evaluate the current network before any training.
-        For instance, run a handful of episodes with random start nodes
-        to see how the initial net does, and plot each resulting tour.
+        Evaluate the untrained model on *all* coords_for_eval sets if provided.
+        We'll name them "iter_000_len_XXXX.png" for the Pretrain stage (iteration=0).
+        We'll store them in the main folder or a subfolder "evaluation".
         """
         log.info("=== Pre-Training Evaluation ===")
-        # We'll store the original MCTS sims value so we can revert after
+        if not self.coords_for_eval:
+            log.info("No coords_for_eval => skipping pretrain eval.")
+            return
+
+        # We'll create a subfolder named "evaluation" for these pretrain tours
+        eval_folder = os.path.join(self.folder, "evaluation")
+        os.makedirs(eval_folder, exist_ok=True)
+
         original_sims = self.args.numMCTSSims
+        self.args.numMCTSSims = self.args.numMCTSSimsEval
 
-        total_length = 0.0
-        for ep in range(self.args.preTrainingEvalEpisodes):
-            # Possibly use a higher number of MCTS sims for evaluation
-            self.args.numMCTSSims = self.args.numMCTSSimsEval
+        total_len = 0.0
+        N = len(self.coords_for_eval)
 
-            start_node = random.randint(0, self.game.num_nodes - 1)
-            log.info(f"Pre-Training Eval Episode {ep+1}/{self.args.preTrainingEvalEpisodes}, Start Node = {start_node}")
-
+        for idx, coords in enumerate(self.coords_for_eval):
+            self.game.node_coordinates = coords
+            # Evaluate from start_node=0
+            state = self.game.getInitEvalState(start_node=0)
             temp_mcts = MCTS(self.game, self.nnet, self.args)
-            state = self.game.getInitEvalState(start_node)
 
-            # Perform a full episode from this start node
             while not self.game.isTerminal(state):
                 pi = temp_mcts.getActionProb(state, temp=0)
-                valid_moves = self.game.getValidMoves(state)
-                pi = pi * valid_moves
-                if np.sum(pi) == 0:
-                    # No valid moves remain
+                pi = np.array(pi, dtype=float)
+                pi *= self.game.getValidMoves(state)
+                sum_pi = np.sum(pi)
+                if sum_pi < 1e-12:
                     break
-                pi = pi / np.sum(pi)
+                pi /= sum_pi
+
                 action = np.argmax(pi)
                 state = self.game.getNextState(state, action)
 
-            # Revert MCTS sims
-            self.args.numMCTSSims = original_sims
-
-            # Summation for average
             length = state.current_length
-            total_length += length
-            log.info(f"Episode {ep+1} final length = {length}")
+            total_len += length
+            log.info(f"[PreTrainEval] EvalSet {idx+1}/{N}, length = {length:.4f}")
 
-            # --- Plot the final tour ---
-            # We'll name the file something like 'pretrain_eval_ep1_lenXXX.png'
-            file_basename = f"Iter_0000_{ep+1}_len{round(length,2)}.png"
-            save_path = os.path.join(self.folder, "graphs", file_basename)
-            self.game.plotTour(state, title=f"PreTrainEval Ep {ep+1} (Len={round(length,2)})", save_path=save_path)
+            # Use iteration=0 in the filename
+            filename = f"set{idx+1}_iter_000_len_{length:.4f}.png"
+            savepath = os.path.join(eval_folder, filename)
+            self.game.plotTour(state, title=f"PreEval Set {idx+1} (Len={length:.4f})", save_path=savepath)
 
-        avg_len = total_length / self.args.preTrainingEvalEpisodes
-        log.info(f"--- Average Tour Length in Pre-Training Eval: {avg_len} ---")
-
+        # Average
+        avg_len = total_len / N
+        log.info(f"Avg length across {N} eval sets in Pre-Training: {avg_len:.4f}")
+        self.args.numMCTSSims = original_sims
 
     def executeEpisode(self):
-        tsp_state = self.game.getInitState(randomize_start=True)
+        """
+        Self-play with random coords if we are not reading from file => Overwrite the game coords.
+        Then do MCTS from random start => leftover distance as target value.
+        """
+        if not self.args.read_from_file:
+            new_coords = np.random.rand(self.game.num_nodes, 2).tolist()
+            self.game.node_coordinates = new_coords
+
+        state = self.game.getInitState(randomize_start=True)
         trajectory = []
-        while not self.game.isTerminal(tsp_state):
-            pi = self.mcts.getActionProb(tsp_state, temp=1)
-            trajectory.append((tsp_state, pi))
+
+        while not self.game.isTerminal(state):
+            pi = self.mcts.getActionProb(state, temp=1)
+            trajectory.append((state, pi))
             action = np.random.choice(len(pi), p=pi)
-            tsp_state = self.game.getNextState(tsp_state, action)
-        final_tour_length = self.game.getTourLength(tsp_state)
-        new_trainExamples = []
+            state = self.game.getNextState(state, action)
+
+        final_len = self.game.getTourLength(state)
+        examples = []
         for (st, pi) in trajectory:
-            leftover_dist = final_tour_length - st.current_length
-            new_trainExamples.append((st, pi, leftover_dist))
-        return new_trainExamples
+            leftover = final_len - st.current_length
+            examples.append((st, pi, leftover))
+
+        return examples
 
     def learn(self):
         for i in range(1, self.args.numIters + 1):
-            log.info(f"Starting Iter #{i} ...")
+            log.info(f"=== Starting Iter #{i} ===")
             iterationTrainExamples = []
 
-            # --- Self-play to gather data ---
+            # Self-play
             for _ in tqdm(range(self.args.numEps), desc="Self Play"):
                 self.mcts = MCTS(self.game, self.nnet, self.args)
                 iterationTrainExamples.extend(self.executeEpisode())
@@ -123,176 +166,279 @@ class Coach:
 
             self.saveTrainExamples()
 
-            # Shuffle and train new network
+            # Flatten & shuffle
             trainExamples = []
             for e in self.trainExamplesHistory:
                 trainExamples.extend(e)
             shuffle(trainExamples)
 
-            self.nnet.save_checkpoint(folder=self.args.checkpoint, filename="temp.pth.tar")
-            self.old_net.load_checkpoint(folder=self.args.checkpoint, filename="temp.pth.tar")
+            log.info(f"Number of training examples: {len(trainExamples)}")
+            self.nnet.save_checkpoint(self.args.checkpoint, "temp.pth.tar")
 
-            old_mcts = MCTS(self.game, self.old_net, self.args)
-            log.info("examples from episode " + str(len(trainExamples)))
-            final_pi_loss, final_v_loss = self.nnet.train(trainExamples)
-            new_mcts = MCTS(self.game, self.nnet, self.args)
+            pi_loss, v_loss = self.nnet.train(trainExamples)
+            self.iteration_pi_loss_history.append(pi_loss)
+            self.iteration_v_loss_history.append(v_loss)
 
-            # Record final losses for this iteration
-            self.iteration_pi_loss_history.append(final_pi_loss)
-            self.iteration_v_loss_history.append(final_v_loss)
+            # Evaluate on stable coords
+            eval_lens = self.evaluateAllCoords()
+            # eval_lens is e.g. a list of final lengths [len_set1, len_set2, ...]
+            # average them
+            avg_len = float(np.mean(eval_lens))
+            self.eval_avg_length_history.append(avg_len)
 
-            # --- Randomly choose a single start node for evaluation ---
-            eval_start_node = random.randint(0, self.game.num_nodes - 1)
+            # Store these set-level lengths for multi-subplot
+            self.eval_set_lengths_history.append(eval_lens)
 
-            log.info("EVALUATING NEW NETWORK from start node %d", eval_start_node)
-            best_state_old = self.evaluateNetwork(old_mcts, start_node=eval_start_node, name="Old")
-            best_state_new = self.evaluateNetwork(new_mcts, start_node=eval_start_node, name="New")
+            log.info(f"Avg length on stable eval sets: {avg_len:.4f}")
 
-            self.avg_lengths_old.append(best_state_old.current_length)
-            self.avg_lengths_new.append(best_state_new.current_length)
-
-            log.info(
-                f"Average Tour Length - New: {best_state_new.current_length}, "
-                f"Old: {best_state_old.current_length}"
-            )
-
-            if best_state_new.current_length <= best_state_old.current_length:
-                best_so_far = best_state_new
-                log.info("ACCEPTING NEW MODEL")
-                self.nnet.save_checkpoint(folder=self.args.checkpoint, filename="best.pth.tar")
-
-                if (self.best_tour_length is None) or (best_so_far.current_length < self.best_tour_length):
-                    self.best_tour_length = best_so_far.current_length
-                    self.args.L_baseline = self.best_tour_length
-                    log.info(f"New best length found: {self.best_tour_length}. Updated baseline to this value.")
+            # If improved => store as best, else keep going
+            if avg_len <= self.best_avg_length:
+                self.best_avg_length = avg_len
+                log.info("New best average => saving model as best.pth.tar")
+                self.nnet.save_checkpoint(self.args.checkpoint, "best.pth.tar")
             else:
-                best_so_far = best_state_old
-                log.info("REJECTING NEW MODEL")
-                self.nnet.load_checkpoint(folder=self.args.checkpoint, filename="temp.pth.tar")
+                log.info("No improvement => continuing")
 
-            # Write current iteration's losses and lengths to CSV
-            try:
-                with open(self.losses_file, "a", newline="") as f:
-                    writer = csv.writer(f)
-                    writer.writerow(
-                        [
-                            i,
-                            "",
-                            "",
-                            final_pi_loss,
-                            final_v_loss,
-                            self.avg_lengths_new[-1],
-                            (
-                                self.avg_lengths_old[-1]
-                                if len(self.avg_lengths_old) == i
-                                else ""
-                            ),
-                        ]
+            # Plot one or all stable sets?
+            # If you want to plot all sets every X iterations
+            do_full_plot = (
+                hasattr(self.args, "plot_all_eval_sets_interval") and
+                (i % self.args.plot_all_eval_sets_interval == 0)
+            )
+            if do_full_plot and self.coords_for_eval:
+                self.plotAllEvalTours(i)
+            else:
+                # Just plot the FIRST stable coord set's resulting tour
+                if self.coords_for_eval:
+                    self.plotSingleEvalTour(
+                        coords=self.coords_for_eval[0],
+                        iteration=i,
+                        set_idx=1,
                     )
-            except:
-                log.error("losses file was in use, couldnt write to file.")
 
-            # Update loss and length plot
-            self.plot_loss_and_length_history()
+            # Plot overall losses & single-line average
+            self.plot_loss_and_length_history(i, avg_len)
+            # Also plot the multi-subplot figure for each evaluation set
+            self.plotMultiEvalSubplots(i)
 
-            if self.args.visualize:
-                rounded_len = round(best_so_far.current_length, 4)
-                tour_str = "_".join(map(str, best_so_far.tour))
-                title = f"Iter: {i} - Length: {rounded_len}"
-                save_path = os.path.join(
-                    self.folder,
-                    "graphs",
-                    f"Iter_{i:04}_len_{rounded_len:05}_{tour_str}.png",
-                )
-                self.game.plotTour(best_so_far, title=title, save_path=save_path)
+    def evaluateAllCoords(self):
+        """
+        Evaluate the *current* net on the entire coords_for_eval list.
+        Return a list of final lengths, one per eval set.
+        """
+        if not self.coords_for_eval:
+            log.info("No coords_for_eval => skipping stable evaluation => returning empty list")
+            return []
 
-        log.info("Average Tour Lengths per Iteration:")
-        for iteration, (old_len, new_len) in enumerate(
-            zip(self.avg_lengths_old, self.avg_lengths_new), 1
-        ):
-            log.info(
-                f"Iteration {iteration}: Old Avg Length = {old_len}, New Avg Length = {new_len}"
+        original_sims = self.args.numMCTSSims
+        self.args.numMCTSSims = self.args.numMCTSSimsEval
+
+        lengths = []
+        for idx, coords in enumerate(self.coords_for_eval):
+            self.game.node_coordinates = coords
+            state = self.game.getInitEvalState(0)
+            temp_mcts = MCTS(self.game, self.nnet, self.args)
+
+            while not self.game.isTerminal(state):
+                pi = temp_mcts.getActionProb(state, temp=0)
+                pi = np.array(pi, dtype=float)
+                pi *= self.game.getValidMoves(state)
+                sum_pi = np.sum(pi)
+                if sum_pi < 1e-12:
+                    break
+                pi /= sum_pi
+
+                action = np.argmax(pi)
+                state = self.game.getNextState(state, action)
+
+            length = state.current_length
+            lengths.append(length)
+
+        self.args.numMCTSSims = original_sims
+        return lengths
+
+    def plotAllEvalTours(self, iteration):
+        """
+        Plots final tours for *all* coords_for_eval from start_node=0
+        in a subfolder "evaluation", named "set{idx+1}_iter_010_len_3.2342.png"
+        """
+        log.info(f"Plotting all stable tours for iteration {iteration} ...")
+
+        eval_folder = os.path.join(self.folder, "evaluation")
+        os.makedirs(eval_folder, exist_ok=True)
+
+        original_sims = self.args.numMCTSSims
+        self.args.numMCTSSims = self.args.numMCTSSimsEval
+
+        for idx, coords in enumerate(self.coords_for_eval):
+            self.game.node_coordinates = coords
+            state = self.game.getInitEvalState(0)
+            temp_mcts = MCTS(self.game, self.nnet, self.args)
+
+            while not self.game.isTerminal(state):
+                pi = temp_mcts.getActionProb(state, temp=0)
+                pi = np.array(pi, dtype=float)
+                pi *= self.game.getValidMoves(state)
+                sum_pi = np.sum(pi)
+                if sum_pi < 1e-12:
+                    break
+                pi /= sum_pi
+                action = np.argmax(pi)
+                state = self.game.getNextState(state, action)
+
+            length = state.current_length
+            filename = f"set{idx+1}_iter_{iteration:03d}_len_{length:.4f}.png"
+            path = os.path.join(eval_folder, filename)
+            self.game.plotTour(
+                state,
+                title=f"EvalSet {idx+1}, Iter={iteration}, Len={length:.4f}",
+                save_path=path
             )
 
-    def plot_loss_and_length_history(self):
-        if len(self.avg_lengths_new) == 0 or len(self.avg_lengths_old) == 0:
-            return
-        iterations = np.arange(1, len(self.avg_lengths_new) + 1)
+        self.args.numMCTSSims = original_sims
 
-        plt.figure(figsize=(12, 6))
+    def plotSingleEvalTour(self, coords, iteration, set_idx=1):
+        """
+        Plots the final route for a single coordinate set (e.g. the first set),
+        naming it "set{set_idx}_iter_###_len_XXXX.png" in the "evaluation" folder.
+        """
+        eval_folder = os.path.join(self.folder, "evaluation")
+        os.makedirs(eval_folder, exist_ok=True)
 
-        # Left: Tour Length
-        plt.subplot(1, 2, 1)
-        plt.plot(iterations, self.avg_lengths_new, label='New Network Tour Length', color='green')
-        plt.plot(iterations, self.avg_lengths_old, label='Old Network Tour Length', color='blue')
-        plt.axhline(y=self.args.NN_length, color='purple', linestyle='-.', label='Nearest Neighbor')
-        if self.best_tour_length is not None:
-            plt.axhline(y=self.best_tour_length, color='brown', linestyle=':', label='Loaded Best Solution')
-        plt.xlabel('Iteration')
-        plt.ylabel('Tour Length')
-        plt.title('Average Tour Lengths per Iteration')
-        plt.legend()
+        original_sims = self.args.numMCTSSims
+        self.args.numMCTSSims = self.args.numMCTSSimsEval
 
-        # Right: Policy + Value Loss
-        plt.subplot(1, 2, 2)
-        ax1 = plt.gca()
-        ax1.plot(iterations, self.iteration_pi_loss_history, label='Policy Loss', color='blue')
+        self.game.node_coordinates = coords
+        state = self.game.getInitEvalState(0)
+        temp_mcts = MCTS(self.game, self.nnet, self.args)
+
+        while not self.game.isTerminal(state):
+            pi = temp_mcts.getActionProb(state, temp=0)
+            pi = np.array(pi, dtype=float)
+            pi *= self.game.getValidMoves(state)
+            sum_pi = np.sum(pi)
+            if sum_pi < 1e-12:
+                break
+            pi /= sum_pi
+
+            action = np.argmax(pi)
+            state = self.game.getNextState(state, action)
+
+        length = state.current_length
+        filename = f"set{set_idx}_iter_{iteration:03d}_len_{length:.4f}.png"
+        path = os.path.join(eval_folder, filename)
+        self.game.plotTour(
+            state,
+            title=f"EvalSet {set_idx}, Iter={iteration}, Len={length:.4f}",
+            save_path=path
+        )
+
+        self.args.numMCTSSims = original_sims
+
+    def plot_loss_and_length_history(self, iteration, eval_len):
+        """
+        We'll store the chart in the main folder (not in "graphs").
+        We'll skip the first 5 points from the Value Loss axis using set_ylim if we have enough points.
+        """
+        iters = range(1, len(self.iteration_pi_loss_history) + 1)
+
+        fig, (axL, axR) = plt.subplots(1, 2, figsize=(12, 6))
+
+        # Left: stable eval length over iterations
+        axL.plot(iters, self.eval_avg_length_history, label='Eval Avg Length', color='green')
+        axL.set_xlabel('Iteration')
+        axL.set_ylabel('Final Tour Length')
+        axL.set_title('Eval Tour Length (Stable) Over Iterations')
+        axL.legend()
+
+        # Right: policy + value loss
+        ax1 = axR
+        ax1.plot(iters, self.iteration_pi_loss_history, label='Policy Loss', color='blue')
         ax1.set_xlabel('Iteration')
         ax1.set_ylabel('Policy Loss', color='blue')
         ax1.tick_params(axis='y', labelcolor='blue')
         ax1.legend(loc='upper left')
+
         ax2 = ax1.twinx()
-        ax2.plot(iterations, self.iteration_v_loss_history, label='Value Loss', color='orange')
+        ax2.plot(iters, self.iteration_v_loss_history, label='Value Loss', color='orange')
         ax2.set_ylabel('Value Loss', color='orange')
         ax2.tick_params(axis='y', labelcolor='orange')
         ax2.set_yscale('log')
+
+        # If we have enough data, skip the first 5 from the range
+        if len(self.iteration_v_loss_history) > 5:
+            # e.g. find the min of Value Loss after the first 5
+            tail_vals = self.iteration_v_loss_history[5:]
+            min_tail = min(tail_vals)
+            max_tail = max(tail_vals)
+            ax2.set_ylim(min_tail * 0.8, max_tail * 1.2)  # some margin
+
         ax2.legend(loc='upper right')
-        plt.title('Policy and Value Losses per Iteration')
 
-        plt.tight_layout()
-        loss_plot_path = os.path.join(self.folder, 'loss_and_length_history.png')
-        plt.savefig(loss_plot_path)
-        plt.close()
+        fig.suptitle(f"Iter {iteration}: EvalLen={eval_len:.4f}", fontsize=14)
+        fig.tight_layout()
 
-    def evaluateNetwork(self, mcts: MCTS, start_node=0, name=""):
-        tsp_state = self.game.getInitEvalState(start_node)
-        for _ in range(self.game.getActionSize()):
-            if self.game.isTerminal(tsp_state):
-                break
-            pi = mcts.getActionProb(tsp_state, temp=0)
-            valid_moves = self.game.getValidMoves(tsp_state)
-            pi = pi * valid_moves
-            if np.sum(pi) == 0:
-                break
-            pi = pi / np.sum(pi)
-            action = np.argmax(pi)
-            next_tsp_state = self.game.getNextState(tsp_state, action)
-            tsp_state = next_tsp_state
-        current_length = tsp_state.current_length
-        best_tour_length = self.best_tour_length
-        if best_tour_length is not None:
-            log.info(f"Best Known Tour Length: {best_tour_length}")
-            log.info(f"Current best Length for {name}: {current_length}")
-            improvement = ((current_length - best_tour_length) / best_tour_length) * 100
-            log.info(f"Percentage above best known: {improvement:.2f}%")
-        else:
-            log.info(f"Current best Length for {name}: {current_length}")
-        return tsp_state
+        # Save in main folder
+        loss_plot_path = os.path.join(self.folder, f"loss_and_length_history.png")
+        fig.savefig(loss_plot_path)
+        plt.close(fig)
+
+    def plotMultiEvalSubplots(self, iteration):
+        """
+        Creates a multi-subplot figure with one subplot for each evaluation set.
+        We'll plot the final length across all iterations for that set,
+        plus a horizontal line for the NN solution if provided.
+        We'll store the figure in the main folder named "evaluation_subplots.png".
+        """
+        if not self.coords_for_eval:
+            return
+
+        n_sets = len(self.coords_for_eval)
+        # Ensure we have an array of shape (#iterations, #eval_sets)
+        # => we stored each iteration as a 1D array of size n_sets in self.eval_set_lengths_history
+
+        # The length is #iteration => x-axis
+        # For each set, we have a line over iteration
+        x = np.arange(1, len(self.eval_set_lengths_history) + 1)
+
+        fig, axs = plt.subplots(n_sets, 1, figsize=(7, 4 * n_sets), sharex=True)
+        if n_sets == 1:
+            axs = [axs]  # Make it iterable
+
+        for idx in range(n_sets):
+            # gather the length for set idx across all iteration
+            lengths_for_this_set = [hist[idx] for hist in self.eval_set_lengths_history]
+            ax = axs[idx]
+            ax.plot(x, lengths_for_this_set, marker='o', label=f"EvalSet {idx+1}")
+            # if we have a nearest neighbor length for it:
+            if idx < len(self.nn_lengths_for_eval):
+                nn_len = self.nn_lengths_for_eval[idx]
+                ax.axhline(y=nn_len, color='red', linestyle='--', label='NN Length')
+
+            ax.set_ylabel("Tour Length")
+            ax.set_title(f"Evaluation Set {idx+1} Over Iterations")
+            ax.grid(True)
+            ax.legend()
+
+        axs[-1].set_xlabel("Iteration")
+        fig.suptitle(f"Multiple Evaluation Sets Subplots (Iter={iteration})")
+
+        out_path = os.path.join(self.folder, "evaluation_subplots.png")
+        fig.tight_layout()
+        fig.savefig(out_path)
+        plt.close(fig)
 
     def saveTrainExamples(self):
         folder = self.args.checkpoint
         if not os.path.exists(folder):
             os.makedirs(folder)
         filename = os.path.join(folder, "checkpoint.examples")
-        with open(filename, "wb+") as f:
+        with open(filename, "wb") as f:
             Pickler(f).dump(self.trainExamplesHistory)
-        f.closed
 
     def loadTrainExamples(self):
-        modelFile = os.path.join(
-            self.args.load_folder_file[0],
-            self.args.load_folder_file[1],
-        )
+        folder, fname = self.args.load_folder_file
+        modelFile = os.path.join(folder, fname)
         examplesFile = modelFile + ".examples"
         if not os.path.isfile(examplesFile):
             log.warning(f'File "{examplesFile}" with trainExamples not found!')
@@ -302,6 +448,5 @@ class Coach:
         else:
             log.info("File with trainExamples found. Loading it...")
             with open(examplesFile, "rb") as f:
-                self.trainExamplesHistory = Unpickler(f).load()
+                self.trainExamplesHistory = Pickler.load(f)
             log.info("Loading done!")
-            self.skipFirstSelfPlay = True

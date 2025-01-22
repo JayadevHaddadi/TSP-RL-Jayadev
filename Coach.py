@@ -104,7 +104,7 @@ class Coach:
         for idx, coords in enumerate(self.coords_for_eval):
             # Evaluate from start_node=0
             self.game.node_coordinates = coords
-            state = self.game.getInitEvalState(start_node=0)
+            state = self.game.getInitState()
             temp_mcts = MCTS(self.game, self.nnet, self.args)
 
             while not self.game.isTerminal(state):
@@ -151,7 +151,7 @@ class Coach:
             new_coords = np.random.rand(self.game.num_nodes, 2).tolist()
             self.game.node_coordinates = new_coords
 
-        state = self.game.getInitState(randomize_start=True)
+        state = self.game.getInitState()
         trajectory = []
 
         while not self.game.isTerminal(state):
@@ -365,9 +365,9 @@ class Coach:
         self.args.numMCTSSims = self.args.numMCTSSimsEval
 
         lengths = []
-        for idx, coords in enumerate(self.coords_for_eval):
+        for _, coords in enumerate(self.coords_for_eval):
             self.game.node_coordinates = coords
-            state = self.game.getInitEvalState(0)
+            state = self.game.getInitState()
             temp_mcts = MCTS(self.game, self.nnet, self.args)
 
             while not self.game.isTerminal(state):
@@ -414,7 +414,7 @@ class Coach:
             # if idx == 0: continue  # skip set1
 
             self.game.node_coordinates = coords
-            state = self.game.getInitEvalState(0)
+            state = self.game.getInitState()
             temp_mcts = MCTS(self.game, self.nnet, self.args)
 
             while not self.game.isTerminal(state):
@@ -454,7 +454,7 @@ class Coach:
         self.args.numMCTSSims = self.args.numMCTSSimsEval
 
         self.game.node_coordinates = coords
-        state = self.game.getInitEvalState(0)
+        state = self.game.getInitState()
         temp_mcts = MCTS(self.game, self.nnet, self.args)
 
         while not self.game.isTerminal(state):

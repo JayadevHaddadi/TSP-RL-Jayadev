@@ -17,30 +17,11 @@ class TSPGame:
         self.node_coordinates = node_coordinates
         self.node_type = None
         self.args = args
-
-    def getInitState(self, randomize_start=False):
-        if randomize_start:
-            start = random.randint(0, self.num_nodes - 1)
-            s = TSPState(self.num_nodes, self.node_coordinates)
-            s.tour = [start]
-            s.unvisited = np.ones(self.num_nodes, dtype=int)
-            s.unvisited[start] = 0
-            s.current_length = 0.0
-            return s
-        else:
-            return TSPState(self.num_nodes, self.node_coordinates)
         
-    def getInitEvalState(self, start_node):
-        """
-        Return a TSPState that starts from the given 'start_node'
-        for consistent evaluation across old and new networks.
-        """
-        from .TSPState import TSPState
+    def getInitState(self):
+        # no "randomize_start" needed
+        # create a TSPState with an EMPTY tour:
         s = TSPState(self.num_nodes, self.node_coordinates)
-        s.tour = [start_node]
-        s.unvisited = np.ones(self.num_nodes, dtype=int)
-        s.unvisited[start_node] = 0
-        s.current_length = 0.0
         return s
 
     def getNumberOfNodes(self):

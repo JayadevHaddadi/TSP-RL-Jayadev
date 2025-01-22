@@ -28,11 +28,11 @@ class MCTS:
         self.Es = {}
         self.Vs = {}
 
-    def getActionProb(self, canonicalBoard, temp=1):
+    def getActionProb(self, state, temp=1):
         for _ in range(self.args.numMCTSSims):
-            self.search(canonicalBoard)
+            self.search(state)
 
-        s = self.game.uniqueStringRepresentation(canonicalBoard)
+        s = self.game.uniqueStringRepresentation(state)
         counts = [
             self.Nsa[(s, a)] if (s, a) in self.Nsa else 0
             for a in range(self.game.getActionSize())

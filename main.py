@@ -17,11 +17,15 @@ def main():
             "numEps": 10,
             "maxlenOfQueue": 200000,
             "numMCTSSims": 50,
-            "numMCTSSimsEval": 100,
+            "numMCTSSimsEval": 1,
             "coordinatesToEvaluate": 5,
             "plot_all_eval_sets_interval": 10,
             "cpuct": 1,
-            "load_model": False,
+            "load_model": True,
+            "load_folder_file": (
+                "./runs/250114-200221_10_rand/checkpoints",
+                "best.pth.tar",
+            ),
             "augmentationFactor": 20,
             "numItersForTrainExamplesHistory": 20,
             # Neural Network parameters
@@ -35,7 +39,7 @@ def main():
             # Node options
             "visualize": True,
             "read_from_file": False,
-            "num_nodes": 20,
+            "num_nodes": 10,
             # Possibly more arguments
         }
     )
@@ -79,6 +83,15 @@ def main():
 
     # Initialize your neural network
     nnet = neural_net_wrapper(game, args)
+    if args.load_model:
+        logging.info(
+            'Loading checkpoint "%s/%s"...',
+            args.load_folder_file[0],
+            args.load_folder_file[1],
+        )
+        nnet.load_checkpoint(args.load_folder_file[0], args.load_folder_file[1])
+    else:
+        logging.warning("Not loading a checkpoint! Starting from scratch.")
 
     # Create the Coach with coords_for_eval and the associated NN lengths
     c = Coach(
@@ -93,7 +106,6 @@ def main():
 
     # Run training
     c.learn()
-
 
 if __name__ == "__main__":
     main()

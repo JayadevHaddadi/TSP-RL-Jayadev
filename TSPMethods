@@ -1,0 +1,483 @@
+import math
+import time
+import random
+from itertools import permutations
+import matplotlib.pyplot as plt
+
+class TSPMethods:
+    """
+    This class contains multiple functions for solving TSP on a set of node coordinates
+    (x, y). We also provide a 'main' style method that tests these approaches for an
+    increasing number of nodes, timing them, and stopping if they exceed a given time limit
+    or reach a max node count. Once a method times out for any test, it's removed from the
+    active list and not used again.
+
+    Printout for each method includes:
+      1) length of the tour (distance),
+      2) time taken,
+      3) % difference from the best (lowest) distance among methods that succeeded,
+      4) % difference from the fastest time among methods that succeeded.
+    """
+
+    ############################################################################
+    # UTILITY METHODS
+    ############################################################################
+    @staticmethod
+    def distance(p1, p2):
+        """Euclidean distance between two points p1=(x1,y1) and p2=(x2,y2)."""
+        return math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+
+    @staticmethod
+    def total_tour_length(tour, coords):
+        """
+        Given a list 'tour' of node indices in visiting order,
+        plus 'coords' with coords[i]=(x,y), returns the total length
+        of the round-trip (including returning to start).
+        """
+        total_dist = 0.0
+        n = len(tour)
+        for i in range(n):
+            curr_node = tour[i]
+            next_node = tour[(i + 1) % n]  # wrap around
+            total_dist += TSPMethods.distance(coords[curr_node], coords[next_node])
+        return total_dist
+
+    ############################################################################
+    # 1) BRUTE FORCE (Exact)
+    ############################################################################
+    @staticmethod
+    def brute_force_tsp(coords):
+        """
+        Brute force TSP: tries every permutation of nodes (fix node0 as start).
+        Returns (best_length, best_tour).
+        """
+        n = len(coords)
+        nodes = list(range(n))
+
+        min_length = float('inf')
+        best_tour = None
+
+        for perm in permutations(nodes[1:]):
+            tour_candidate = [0] + list(perm)
+            length = TSPMethods.total_tour_length(tour_candidate, coords)
+            if length < min_length:
+                min_length = length
+                best_tour = tour_candidate
+
+        return (min_length, best_tour)
+
+    ############################################################################
+    # 2) BRANCH AND BOUND (Exact)
+    ############################################################################
+    @staticmethod
+    def branch_and_bound_tsp(coords):
+        """
+        A simple Branch and Bound TSP using a basic lower-bound approach:
+          - best_cost (global) tracks the best solution found so far
+          - for a partial tour, the bound = cost_so_far + sum_of_min_edges_for_unvisited
+          - prune if bound >= best_cost
+        Returns (best_cost, best_tour).
+        """
+        n = len(coords)
+        dist = [[0]*n for _ in range(n)]
+        for i in range(n):
+            for j in range(n):
+                dist[i][j] = TSPMethods.distance(coords[i], coords[j])
+
+        best_path = []
+        best_cost = float('inf')
+
+        # Precompute each node's minimum outgoing edge for bounding
+        min_edge = []
+        for i in range(n):
+            min_edge.append(min(dist[i][j] for j in range(n) if j != i))
+
+        def bnb_dfs(path, cost, visited):
+            nonlocal best_cost, best_path
+            if len(path) == n:
+                # complete tour => add cost back to start
+                return_cost = cost + dist[path[-1]][path[0]]
+                if return_cost < best_cost:
+                    best_cost = return_cost
+                    best_path = path[:]
+                return
+
+            # simple bound: current cost + sum of min edges for unvisited nodes
+            bound = cost
+            for node in range(n):
+                if node not in visited:
+                    bound += min_edge[node]
+
+            if bound >= best_cost:
+                # prune
+                return
+
+            last_node = path[-1]
+            for next_node in range(n):
+                if next_node not in visited:
+                    new_cost = cost + dist[last_node][next_node]
+                    if new_cost < best_cost:
+                        path.append(next_node)
+                        visited.add(next_node)
+                        bnb_dfs(path, new_cost, visited)
+                        visited.remove(next_node)
+                        path.pop()
+
+        # start from node 0
+        start_node = 0
+        path = [start_node]
+        visited = set([start_node])
+        bnb_dfs(path, 0, visited)
+
+        return (best_cost, best_path)
+
+    ############################################################################
+    # 3) HELD-KARP (Exact - Dynamic Programming)
+    ############################################################################
+    @staticmethod
+    def held_karp_tsp(coords):
+        """
+        Held-Karp TSP Dynamic Programming approach:
+          - Time complexity: O(n^2 * 2^n)
+          - We fix node 0 as the start (and end).
+        Returns (best_length, best_tour).
+        """
+        n = len(coords)
+        dist = [[0]*n for _ in range(n)]
+        for i in range(n):
+            for j in range(n):
+                dist[i][j] = TSPMethods.distance(coords[i], coords[j])
+
+        if n == 1:
+            return (0.0, [0])
+        if n == 2:
+            d = dist[0][1] + dist[1][0]
+            return (d, [0, 1])
+
+        INF = float('inf')
+        # dp[mask][i] = cost to start at 0, visit 'mask' of nodes, ending at i
+        dp = [[INF]*n for _ in range(1 << n)]
+        dp[1][0] = 0  # visited only {0}, ending at 0 => cost=0
+
+        # parent array for path reconstruction
+        parent = [[-1]*n for _ in range(1 << n)]
+
+        for mask in range(1 << n):
+            for i in range(n):
+                if dp[mask][i] == INF:
+                    continue
+                # try next node j not in mask
+                for j in range(n):
+                    if not (mask & (1 << j)):
+                        next_mask = mask | (1 << j)
+                        new_cost = dp[mask][i] + dist[i][j]
+                        if new_cost < dp[next_mask][j]:
+                            dp[next_mask][j] = new_cost
+                            parent[next_mask][j] = i
+
+        all_visited_mask = (1 << n) - 1
+        best_cost = INF
+        best_end = -1
+        for i in range(1, n):
+            curr_cost = dp[all_visited_mask][i] + dist[i][0]
+            if curr_cost < best_cost:
+                best_cost = curr_cost
+                best_end = i
+
+        # reconstruct path
+        path = []
+        mask = all_visited_mask
+        curr = best_end
+        while curr != -1:
+            path.append(curr)
+            pmask = mask
+            prev = parent[mask][curr]
+            mask = mask & ~(1 << curr)
+            curr = prev
+        path.append(0)
+        path.reverse()
+
+        return (best_cost, path)
+
+    ############################################################################
+    # 4) NEAREST NEIGHBOR (Heuristic)
+    ############################################################################
+    @staticmethod
+    def nearest_neighbor_tsp(coords):
+        """
+        Nearest-neighbor starting from node 0.
+        Returns (tour_length, tour).
+        """
+        n = len(coords)
+        unvisited = set(range(n))
+        unvisited.remove(0)
+        tour = [0]
+
+        while unvisited:
+            curr_node = tour[-1]
+            next_node = min(unvisited, key=lambda node: TSPMethods.distance(coords[curr_node], coords[node]))
+            tour.append(next_node)
+            unvisited.remove(next_node)
+
+        length = TSPMethods.total_tour_length(tour, coords)
+        return (length, tour)
+
+    ############################################################################
+    # 5) TWO-OPT (Heuristic)
+    ############################################################################
+    @staticmethod
+    def two_opt_tsp(coords):
+        """
+        A basic 2-opt local search. Start with nearest-neighbor, then do 2-opt swaps
+        until no improvement.
+        Returns (best_length, best_tour).
+        """
+        def two_opt_swap(tour, i, j):
+            # Reverse the segment [i : j+1]
+            return tour[:i] + list(reversed(tour[i:j+1])) + tour[j+1:]
+
+        nn_length, current_tour = TSPMethods.nearest_neighbor_tsp(coords)
+        best_tour = current_tour[:]
+        best_length = nn_length
+        n = len(coords)
+        improved = True
+
+        while improved:
+            improved = False
+            for i in range(1, n - 1):
+                for j in range(i + 1, n):
+                    if j - i == 1:
+                        continue
+                    new_tour = two_opt_swap(best_tour, i, j)
+                    new_length = TSPMethods.total_tour_length(new_tour, coords)
+                    if new_length < best_length:
+                        best_length = new_length
+                        best_tour = new_tour
+                        improved = True
+                        break
+                if improved:
+                    break
+
+        return (best_length, best_tour)
+
+    ############################################################################
+    # 6) RANDOM INSERTION (Heuristic)
+    ############################################################################
+    @staticmethod
+    def random_insertion_tsp(coords):
+        """
+        Start with a random node, then keep inserting random unvisited nodes
+        in the position that yields the smallest increase in total length.
+        """
+        n = len(coords)
+        unvisited = set(range(n))
+
+        # Start with a random node
+        start = random.choice(list(unvisited))
+        unvisited.remove(start)
+        tour = [start]
+
+        # Insert one more random node if it exists
+        if unvisited:
+            next_node = random.choice(list(unvisited))
+            unvisited.remove(next_node)
+            tour.append(next_node)
+
+        # Repeatedly pick random node from unvisited, and insert
+        while unvisited:
+            node = random.choice(list(unvisited))
+            unvisited.remove(node)
+            best_pos = 0
+            best_increase = float('inf')
+            for i in range(len(tour) + 1):
+                new_tour = tour[:i] + [node] + tour[i:]
+                new_length = TSPMethods.total_tour_length(new_tour, coords)
+                if new_length < best_increase:
+                    best_increase = new_length
+                    best_pos = i
+            tour.insert(best_pos, node)
+
+        length = TSPMethods.total_tour_length(tour, coords)
+        return (length, tour)
+
+    ############################################################################
+    # MAIN-STYLE METHOD
+    #  - generate 'num_graphs' TSP graphs of size n
+    #  - attempt each *active* method; if it times out => remove from active list
+    #  - if all active methods time out on all graphs => stop
+    #  - continue until we either reach 'max_n' or run out of active methods
+    #  - print summary of how far each method got
+    #  - plot time vs. node count for each method
+    ############################################################################
+    @staticmethod
+    def run_experiment(num_graphs=3, time_limit=100, max_n=10):
+        """
+        Arguments:
+          - num_graphs: number of random TSP instances to generate per node count
+          - time_limit: in seconds; if a method takes longer, it's removed (timed out)
+          - max_n: the maximum node count to attempt before stopping
+
+        For each n in [4 .. max_n]:
+          - generate `num_graphs` TSP instances
+          - run each still-active method on each instance
+          - gather and print performance stats (distance, time, distance difference, time difference)
+          - if for a given n, all active methods time out on all graphs => stop
+        End with a summary of how far each method reached,
+        plus a time vs node count plot for those that did not time out before max_n.
+        """
+
+        # List of (method_name, function)
+        all_methods = [
+            ("Brute Force", TSPMethods.brute_force_tsp),
+            ("Branch & Bound", TSPMethods.branch_and_bound_tsp),
+            ("Held-Karp DP", TSPMethods.held_karp_tsp),
+            ("Nearest Neighbor", TSPMethods.nearest_neighbor_tsp),
+            ("2-Opt", TSPMethods.two_opt_tsp),
+            ("Random Insertion", TSPMethods.random_insertion_tsp),
+        ]
+        # We keep track of which are still active
+        active_methods = all_methods[:]
+
+        # For final summary: which n each method reached (initialized to 3 => haven't started 4 yet)
+        method_max_n = {m[0]: 3 for m in all_methods}
+
+        # For plotting: store (n, average_time) for each method. We'll only store
+        # a data point if that method succeeds on *all* graphs for that n.
+        method_time_records = {m[0]: [] for m in all_methods}
+
+        n = 4  # start from n=4
+        while n <= max_n:
+            if not active_methods:
+                print("\nNo active methods remain; all have timed out previously. Stopping experiment.")
+                break
+
+            print(f"\n=== TSP with n={n} nodes ===")
+            print(f"Permutation count = {math.factorial(n)} ( = {n}! )")
+
+            # Generate random TSP instances
+            graphs = []
+            for _ in range(num_graphs):
+                coords = [(random.random(), random.random()) for _ in range(n)]
+                graphs.append(coords)
+
+            # We'll track the total time for each method (for averaging later),
+            # and how many successful solutions each method had.
+            times_this_iteration = {m[0]: 0.0 for m in active_methods}
+            success_count_this_iteration = {m[0]: 0 for m in active_methods}
+
+            all_graphs_timed_out = True
+
+            # For each graph, we'll collect the results for methods that do not time out.
+            # After we have them, we figure out the best distance and fastest time,
+            # and then print the 4 desired pieces (1-distance, 2-time, 3-dist%, 4-time%).
+            for g_idx, coords in enumerate(graphs, start=1):
+                print(f"\nGraph {g_idx}/{num_graphs}, n={n}")
+
+                results = []  # (method_name, distance, elapsed_time)
+
+                i = 0
+                while i < len(active_methods):
+                    method_name, method_func = active_methods[i]
+                    start_time = time.time()
+                    try:
+                        cost, tour = method_func(coords)
+                        elapsed = time.time() - start_time
+
+                        if elapsed > time_limit:
+                            # Timed out
+                            print(f" - {method_name:>20} => TIMED OUT (>{elapsed:.2f}s). Removing from active list.")
+                            active_methods.pop(i)
+                            continue
+                        else:
+                            # Method succeeded
+                            results.append((method_name, cost, elapsed))
+                            i += 1
+
+                    except Exception as e:
+                        # Treat error as a timeout => remove method
+                        elapsed = time.time() - start_time
+                        print(f" - {method_name:>20} => ERROR/timeout: {e} (time={elapsed:.2f}s). Removing.")
+                        active_methods.pop(i)
+                        continue
+
+                # Now we have the results for this graph (those that didn't time out)
+                if results:
+                    all_graphs_timed_out = False
+
+                    # Find the best distance and fastest time among *this* graph's results
+                    best_dist = min(r[1] for r in results)
+                    fastest_time = min(r[2] for r in results)
+
+                    # Print for each method: length, time, dist diff %, time diff %
+                    for (m_name, dist_val, t_val) in results:
+                        dist_diff_pct = 0.0
+                        time_diff_pct = 0.0
+                        if best_dist > 0:
+                            dist_diff_pct = 100.0 * (dist_val - best_dist) / best_dist
+                        if fastest_time > 0:
+                            time_diff_pct = 100.0 * (t_val - fastest_time) / fastest_time
+
+                        print(f" - {m_name:>20} => length={dist_val:.4f}, time={t_val:.2f}, "
+                              f"dist diff={dist_diff_pct:+.1f}%, time diff={time_diff_pct:+.1f}%")
+
+                        times_this_iteration[m_name] += t_val
+                        success_count_this_iteration[m_name] += 1
+
+                else:
+                    # All active methods timed out for this graph
+                    print("   => All active methods timed out on this graph.")
+
+            # After finishing all graphs for this n
+            if all_graphs_timed_out:
+                print("\nAll active methods timed out on all graphs => stopping experiment.")
+                break
+            else:
+                # For each method that remains active, check if it succeeded on ALL graphs
+                # => if so, store an average time for plotting
+                for (m_name, _) in active_methods:
+                    if success_count_this_iteration[m_name] == num_graphs:
+                        avg_time = times_this_iteration[m_name] / num_graphs
+                        method_time_records[m_name].append((n, avg_time))
+                        method_max_n[m_name] = n
+
+            n += 1
+
+        # We've either reached max_n or run out of active methods
+        print("\n=== SUMMARY OF METHOD PROGRESS ===")
+        for m_name, _ in all_methods:
+            reached = method_max_n[m_name]
+            if reached < 4:
+                print(f" - {m_name:>20} => never got off the ground (timed out at n=4).")
+            else:
+                print(f" - {m_name:>20} => handled up to n={reached} without timing out.")
+
+        # Finally, produce a time vs. node count plot for each method
+        TSPMethods._plot_time_records(method_time_records)
+
+    @staticmethod
+    def _plot_time_records(method_time_records):
+        """
+        Helper method to produce a matplotlib plot of time vs node-count for each method.
+        method_time_records is a dict:
+          { method_name : [ (n, avg_time), (n2, avg_time2), ... ] }
+        """
+        plt.figure(figsize=(8, 6))
+        for m_name, data_points in method_time_records.items():
+            if data_points:
+                # Sort by n to ensure correct plotting
+                data_points = sorted(data_points, key=lambda x: x[0])
+                ns = [dp[0] for dp in data_points]
+                times = [dp[1] for dp in data_points]
+                plt.plot(ns, times, marker='o', label=m_name)
+
+        plt.title("Method Times vs. Node Count")
+        plt.xlabel("Number of Nodes (n)")
+        plt.ylabel("Average Time (s)")
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+
+# EXAMPLE USAGE (uncomment to run directly):
+if __name__ == "__main__":
+    TSPMethods.run_experiment(num_graphs=1, time_limit=100, max_n=100)

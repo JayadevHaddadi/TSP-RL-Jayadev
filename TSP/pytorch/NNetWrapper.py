@@ -4,6 +4,7 @@ import sys
 import numpy as np
 from tqdm import tqdm
 
+
 sys.path.append("../../")
 from TSP.TSPGame import TSPGame
 from utils import *
@@ -12,14 +13,27 @@ from NeuralNet import NeuralNet
 import torch
 import torch.optim as optim
 
-from .TSPNNet import TSPNNet
-
 ###################################
 # NNetWrapper Class
 ###################################
 class NNetWrapper(NeuralNet):
     def __init__(self, game: TSPGame, args):
-        self.nnet = TSPNNet(game, args)
+        if args.architecture == "pointer":
+            from .TSPNNet_Pointer import TSPNNet_Pointer
+            self.nnet = TSPNNet_Pointer(game, args)
+        elif args.architecture == "gat":
+            from .TSPNNet_GAT import TSPNNet_GAT
+            self.nnet = TSPNNet_GAT(game, args)
+        elif args.architecture == "gat_deepseek":
+            from .TSPNNet_GAT_deepseek import TSPNNet
+            self.nnet = TSPNNet(game, args)
+        elif args.architecture == "transformer_deepseek":
+            from .TSPNNet_Transformer_deepseek import TransformerModel
+            self.nnet = TransformerModel(game, args)
+        else:
+            from .TSPNNet import TSPNNet
+            self.nnet = TSPNNet(game, args)
+            
         self.game = game
         self.args = args
         self.board_size = game.getNumberOfNodes()
@@ -48,7 +62,14 @@ class NNetWrapper(NeuralNet):
             else:
                 tour_positions[node] = 0.0
 
-        node_features = np.hstack((normalized_coords, tour_positions.reshape(-1, 1)))
+        # for gat or something
+        # unvisited = np.array(state.unvisited, dtype=np.float32).reshape(-1, 1)
+        # node_features = np.hstack((
+        #     normalized_coords,
+        #     tour_positions.reshape(-1, 1),
+        #     unvisited  # New feature: 1=unvisited, 0=visited
+        # ))
+        node_features = np.hstack((normalized_coords, tour_positions.reshape(-1, 1))) #FOR NORMAL non GAT
 
         # adjacency: edges between consecutive visited nodes only
         adjacency_matrix = np.zeros((num_nodes, num_nodes), dtype=np.float32)

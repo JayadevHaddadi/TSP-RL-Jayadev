@@ -10,25 +10,28 @@ from TSP.pytorch.NNetWrapper import NNetWrapper as neural_net_wrapper
 from Coach import Coach
 from utils import *
 
+
 def main():
     args = dotdict(
         {
             "numIters": 1000,
-            "numEps": 10,
+            "numEps": 5,
             "maxlenOfQueue": 200000,
-            "numMCTSSims": 50,
-            "numMCTSSimsEval": 1,
+            "numMCTSSims": 25,
+            "numMCTSSimsEval": 25,
             "coordinatesToEvaluate": 5,
             "plot_all_eval_sets_interval": 10,
             "cpuct": 1,
-            "load_model": True,
+            "load_model": False,
             "load_folder_file": (
                 "./runs/250114-200221_10_rand/checkpoints",
                 "best.pth.tar",
             ),
-            "augmentationFactor": 20,
+            "augmentationFactor": 1,
             "numItersForTrainExamplesHistory": 20,
             # Neural Network parameters
+            # "gat" or "pointer" or "gcn"/default, "gat_deepseek", "transformer_deepseek"
+            "architecture": "transformer_deepseek",  
             "lr": 0.001,
             "dropout": 0.3,
             "epochs": 5,
@@ -36,6 +39,12 @@ def main():
             "cuda": torch.cuda.is_available(),
             "num_channels": 128,
             "max_gradient_norm": 5.0,
+
+            # For DEEPSEEK:
+            # "num_channels": 256,       # Larger hidden dimensions
+            # "dropout": 0.1,            # Adjust for regularization
+            # "max_gradient_norm": 1.0,  # Different clipping
+
             # Node options
             "visualize": True,
             "read_from_file": False,
@@ -45,7 +54,7 @@ def main():
     )
 
     run_timestamp = datetime.now().strftime("%y%m%d-%H%M%S")
-    run_name = f"{run_timestamp}_{args.num_nodes}_rand"
+    run_name = f"{run_timestamp}_{args.num_nodes}_{args.architecture}"
     run_folder = os.path.join("runs", run_name)
     os.makedirs(run_folder, exist_ok=True)
 
@@ -101,11 +110,12 @@ def main():
         best_tour_length=best_tour_length,
         folder=run_folder,
         coords_for_eval=coords_for_eval,
-        nn_lengths_for_eval=nn_lengths_for_eval
+        nn_lengths_for_eval=nn_lengths_for_eval,
     )
 
     # Run training
     c.learn()
+
 
 if __name__ == "__main__":
     main()

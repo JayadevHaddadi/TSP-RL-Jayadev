@@ -17,19 +17,20 @@ import torch.optim as optim
 # NNetWrapper Class
 ###################################
 class NNetWrapper(NeuralNet):
-    def __init__(self, game: TSPGame, args):
-        if args.architecture == "pointer":
+    def __init__(self, game: TSPGame, args):  # args is now a dictionary
+        # Change all args.architecture to args['architecture']
+        if args.get('architecture', 'default') == "pointer":
             from .TSPNNet_Pointer import TSPNNet_Pointer
             self.nnet = TSPNNet_Pointer(game, args)
-        elif args.architecture == "gat":
+        elif args.get('architecture') == "gat":
             from .TSPNNet_GAT import TSPNNet_GAT
             self.nnet = TSPNNet_GAT(game, args)
-        elif args.architecture == "gat_deepseek":
+        elif args.get('architecture') == "gat_deepseek":
             from .TSPNNet_GAT_deepseek import TSPNNet
             self.nnet = TSPNNet(game, args)
-        elif args.architecture == "transformer_deepseek":
+        elif args.get('architecture') == "transformer_deepseek":
             from .TSPNNet_Transformer_deepseek import TransformerModel
-            self.nnet = TransformerModel(game, args)
+            self.nnet = TransformerModel(game, args)  # Fixed class name
         else:
             from .TSPNNet import TSPNNet
             self.nnet = TSPNNet(game, args)

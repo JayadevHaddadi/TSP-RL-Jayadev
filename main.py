@@ -90,11 +90,13 @@ def main():
     # Different architectures to compare
     # Provide any extra parameters for each arch
     arch_list = [
-        ("gcn",           {"architecture": "gcn",}),
-        ("gcn MCTS-50",           {"architecture": "gcn", "numMCTSSimsEval": 50 ,}),
-        ("gcn Augmentation-10",           {"architecture": "gcn",          "augmentationFactor": 10}),
-        ("pointer",       {"architecture": "pointer",      "num_channels": 128, "dropout": 0.3}),
-        ("transformer",   {"architecture": "transformer_deepseek", "num_channels": 256, "dropout": 0.1}),
+        ("gcn dropout 0.3",           {"architecture": "gcn",}),
+        ("gcn dropout 0.1",           {"architecture": "gcn","dropout": 0.1}),
+        ("gcn dropout 0.5",           {"architecture": "gcn","dropout": 0.5}),
+        # ("gcn MCTS-50",           {"architecture": "gcn", "numMCTSSimsEval": 50 ,}),
+        # ("gcn Augmentation-10",           {"architecture": "gcn",          "augmentationFactor": 10}),
+        # ("pointer",       {"architecture": "pointer",      "num_channels": 128, "dropout": 0.3}),
+        # ("transformer",   {"architecture": "transformer_deepseek", "num_channels": 256, "dropout": 0.1}),
     ]
 
     # --------------------------------------------------------------------------

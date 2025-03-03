@@ -31,9 +31,11 @@ class NNetWrapper(NeuralNet):
         elif args.get('architecture') == "transformer_deepseek":
             from .TSPNNet_Transformer_deepseek import TransformerModel
             self.nnet = TransformerModel(game, args)  # Fixed class name
-        else:
-            from .TSPNNet import TSPNNet
+        elif args.get('architecture') == "gcn":
+            from .TSPNNet_GCN import TSPNNet
             self.nnet = TSPNNet(game, args)
+        else:
+            raise Exception("No known NN architecture")
             
         self.game = game
         self.args = args
@@ -63,13 +65,6 @@ class NNetWrapper(NeuralNet):
             else:
                 tour_positions[node] = 0.0
 
-        # for gat or something
-        # unvisited = np.array(state.unvisited, dtype=np.float32).reshape(-1, 1)
-        # node_features = np.hstack((
-        #     normalized_coords,
-        #     tour_positions.reshape(-1, 1),
-        #     unvisited  # New feature: 1=unvisited, 0=visited
-        # ))
         node_features = np.hstack((normalized_coords, tour_positions.reshape(-1, 1))) #FOR NORMAL non GAT
 
         # adjacency: edges between consecutive visited nodes only

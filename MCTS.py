@@ -67,10 +67,7 @@ class MCTS:
         if s not in self.Ps:
             # Leaf node
             self.Ps[s], leftover_v = self.nnet.predict(tsp_state)
-            # leftover_v = how much distance left to complete the path
-            # total cost = tsp_state.current_length + leftover_v
-            # MCTS is maximizing Q => we store Q as - total cost
-            # i.e. Qvalue = - (cost_so_far + leftover_v)
+            
             total_cost = tsp_state.current_length + leftover_v
             v = -total_cost
 

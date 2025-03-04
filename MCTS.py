@@ -27,79 +27,81 @@ class MCTS:
         self.Ps = {}
         self.Es = {}
         self.Vs = {}
+        self.Pred_cache = {}  # New cache for predictions
 
     def getActionProb(self, state, temp=1):
+        uniqueStringe = self.game.uniqueStringRepresentation(state)
         for _ in range(self.args.numMCTSSims):
-            self.search(state)
-
-        s = self.game.uniqueStringRepresentation(state)
+            self.search(state, uniqueStringe)  # Pass the precomputed string
+        
         counts = [
-            self.Nsa[(s, a)] if (s, a) in self.Nsa else 0
+            self.Nsa[(uniqueStringe, a)] if (uniqueStringe, a) in self.Nsa else 0
             for a in range(self.game.getActionSize())
         ]
-        # print("counts",counts)
-
         if temp == 0:
             bestAs = np.argwhere(counts == np.max(counts)).flatten()
             bestA = np.random.choice(bestAs)
             probs = [0] * len(counts)
             probs[bestA] = 1
-            return probs
         else:
             counts_exp = [x ** (1.0 / temp) for x in counts]
             counts_sum = float(sum(counts_exp))
             probs = [x / counts_sum for x in counts_exp]
-            return probs
+        return probs
 
-    def search(self, tsp_state: TSPState):
-        s = self.game.uniqueStringRepresentation(tsp_state)
+    def search(self, tsp_state: TSPState, state_str=None):
+        state_string = state_str if state_str is not None else self.game.uniqueStringRepresentation(tsp_state)
 
-        if s not in self.Es:
+        if state_string not in self.Es:
             if self.game.isTerminal(tsp_state): # Terminal
-                self.Es[s] = self.game.getFinalScore(tsp_state)
-                return self.Es[s]
+                self.Es[state_string] = self.game.getFinalScore(tsp_state)
+                return self.Es[state_string]
             else:
-                self.Es[s] = None # Not terminal
-        if self.Es[s] != None:
+                self.Es[state_string] = None # Not terminal
+        if self.Es[state_string] != None:
             # terminal node
-            return self.Es[s]
+            return self.Es[state_string]
 
-        if s not in self.Ps:
+        if state_string not in self.Ps:
             # Leaf node
-            self.Ps[s], leftover_v = self.nnet.predict(tsp_state)
+            if state_string in self.Pred_cache:
+                self.Ps[state_string], leftover_v = self.Pred_cache[s]
+            else:
+                self.Ps[state_string], leftover_v = self.nnet.predict(tsp_state)
+                self.Pred_cache[state_string] = (self.Ps[state_string], leftover_v)
             
             total_cost = tsp_state.current_length + leftover_v
             v = -total_cost
 
             valids = self.game.getValidMoves(tsp_state)
-            self.Ps[s] = self.Ps[s] * valids
-            sum_Ps_s = np.sum(self.Ps[s])
+            self.Ps[state_string] = self.Ps[state_string] * valids
+            sum_Ps_s = np.sum(self.Ps[state_string])
             if sum_Ps_s > 0:
-                self.Ps[s] /= sum_Ps_s
+                self.Ps[state_string] /= sum_Ps_s
             else:
                 log.error("All valid moves were masked, assigning equal probabilities.")
-                self.Ps[s] = self.Ps[s] + valids
-                self.Ps[s] /= np.sum(self.Ps[s])
+                self.Ps[state_string] = self.Ps[state_string] + valids
+                self.Ps[state_string] /= np.sum(self.Ps[state_string])
 
-            self.Vs[s] = valids
-            self.Ns[s] = 0
+            self.Vs[state_string] = valids
+            self.Ns[state_string] = 0
             return v
 
 
         # Internal Node
-        valids = self.Vs[s]
+        valids = self.Vs[state_string]
         cur_best = -float("inf")
         best_act = -1
 
         # UCB
         for a in range(self.game.getActionSize()):
             if valids[a]:
-                if (s, a) in self.Qsa:
-                    u = self.Qsa[(s, a)] + self.args.cpuct * self.Ps[s][a] * math.sqrt(
-                        self.Ns[s]
-                    ) / (1 + self.Nsa[(s, a)])
+                if (state_string, a) in self.Qsa:
+                    u = self.Qsa[(state_string, a)] + self.args.cpuct * self.Ps[state_string][a] * math.sqrt(
+                        self.Ns[state_string]
+                    ) / (1 + self.Nsa[(state_string, a)])
                 else:
-                    u = self.args.cpuct * self.Ps[s][a] * math.sqrt(self.Ns[s] + EPS)
+                    u = self.args.cpuct * self.Ps[state_string][a] * math.sqrt(self.Ns[state_string] + EPS)
                 if u > cur_best:
                     cur_best = u
                     best_act = a
@@ -110,12 +112,13 @@ class MCTS:
         v = self.search(next_s)
 
         # Update Q, N - Avarage of old Qsa and new v
-        if (s, a) in self.Qsa:
-            self.Qsa[(s, a)] = (self.Nsa[(s, a)] * self.Qsa[(s, a)] + v) / (self.Nsa[(s, a)] + 1)
-            self.Nsa[(s, a)] += 1
+        if (state_string, a) in self.Qsa:
+            # Keep maximum value for deterministic environments
+            self.Qsa[(state_string, a)] = max(self.Qsa[(state_string, a)], v)
+            self.Nsa[(state_string, a)] += 1
         else:
-            self.Qsa[(s, a)] = v
-            self.Nsa[(s, a)] = 1
+            self.Qsa[(state_string, a)] = v
+            self.Nsa[(state_string, a)] = 1
 
-        self.Ns[s] += 1
+        self.Ns[state_string] += 1
         return v

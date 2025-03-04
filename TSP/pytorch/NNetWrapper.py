@@ -13,30 +13,36 @@ from NeuralNet import NeuralNet
 import torch
 import torch.optim as optim
 
+
 ###################################
 # NNetWrapper Class
 ###################################
 class NNetWrapper(NeuralNet):
     def __init__(self, game: TSPGame, args):  # args is now a dictionary
         # Change all args.architecture to args['architecture']
-        if args.get('architecture', 'default') == "pointer":
+        if args.get("architecture", "default") == "pointer":
             from .TSPNNet_Pointer import TSPNNet_Pointer
+
             self.nnet = TSPNNet_Pointer(game, args)
-        elif args.get('architecture') == "gat":
+        elif args.get("architecture") == "gat":
             from .TSPNNet_GAT import TSPNNet_GAT
+
             self.nnet = TSPNNet_GAT(game, args)
-        elif args.get('architecture') == "gat_deepseek":
+        elif args.get("architecture") == "gat_deepseek":
             from .TSPNNet_GAT_deepseek import TSPNNet
+
             self.nnet = TSPNNet(game, args)
-        elif args.get('architecture') == "transformer_deepseek":
+        elif args.get("architecture") == "transformer_deepseek":
             from .TSPNNet_Transformer_deepseek import TransformerModel
+
             self.nnet = TransformerModel(game, args)  # Fixed class name
-        elif args.get('architecture') == "gcn":
+        elif args.get("architecture") == "gcn":
             from .TSPNNet_GCN import TSPNNet
+
             self.nnet = TSPNNet(game, args)
         else:
             raise Exception("No known NN architecture")
-            
+
         self.game = game
         self.args = args
         self.board_size = game.getNumberOfNodes()
@@ -44,7 +50,9 @@ class NNetWrapper(NeuralNet):
         self.node_coordinates = np.array(game.node_coordinates)
         coords_min = self.node_coordinates.min(axis=0)
         coords_max = self.node_coordinates.max(axis=0)
-        self.normalized_coords = (self.node_coordinates - coords_min) / (coords_max - coords_min + 1e-8)
+        self.normalized_coords = (self.node_coordinates - coords_min) / (
+            coords_max - coords_min + 1e-8
+        )
         # Convert to tensor and move to device upfront
         self.normalized_coords = torch.FloatTensor(self.normalized_coords)
 
@@ -66,19 +74,23 @@ class NNetWrapper(NeuralNet):
                 tour_positions[node] = 0.0
             is_visited[node] = 1
 
-        node_features = torch.cat((
-            normalized_coords,
-            tour_positions.unsqueeze(1),
-            is_visited.unsqueeze(1)
-        ), dim=1)
-        
+        node_features = torch.cat(
+            (normalized_coords, tour_positions.unsqueeze(1), is_visited.unsqueeze(1)),
+            dim=1,
+        )
+
         # Compute adjacency matrix as a tensor directly
-        adjacency_matrix = torch.zeros((num_nodes, num_nodes), device=normalized_coords.device)
+        adjacency_matrix = torch.zeros(
+            (num_nodes, num_nodes), device=normalized_coords.device
+        )
         for i in range(len(tour) - 1):
             from_node = tour[i]
             to_node = tour[i + 1]
             adjacency_matrix[from_node, to_node] = 1
             adjacency_matrix[to_node, from_node] = 1
+
+        # print("nodeFeatures\n" , node_features.unsqueeze(0))
+        # print("Adjmatrix\n",adjacency_matrix.unsqueeze(0))
 
         return node_features.unsqueeze(0), adjacency_matrix.unsqueeze(0)
 
@@ -130,7 +142,9 @@ class NNetWrapper(NeuralNet):
                 # out_v is leftover distance the network predicts
 
                 l_pi = self.loss_pi(target_pis, out_pi)
-                l_v = self.loss_v(target_vs, out_v)  # MSE between leftover_distance and predicted leftover
+                l_v = self.loss_v(
+                    target_vs, out_v
+                )  # MSE between leftover_distance and predicted leftover
                 total_loss = l_pi + l_v
 
                 pi_losses.update(l_pi.item(), node_features.size(0))
@@ -148,8 +162,6 @@ class NNetWrapper(NeuralNet):
             v_loss_list.append(v_losses.avg)
 
         return pi_loss_list[-1], v_loss_list[-1]
-
-
 
     def predict(self, state):
         self.nnet.eval()

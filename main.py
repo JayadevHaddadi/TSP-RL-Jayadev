@@ -169,18 +169,18 @@ def parse_arguments():
         "--num-iters", type=int, default=1000, help="Number of iterations"
     )
     parser.add_argument(
-        "--num-eps", type=int, default=5, help="Number of episodes per iteration"
+        "--num-eps", type=int, default=10, help="Number of episodes per iteration"
     )
     parser.add_argument(
         "--max-queue-len", type=int, default=200000, help="Maximum length of queue"
     )
     parser.add_argument(
-        "--num-mcts-sims", type=int, default=25, help="Number of MCTS simulations"
+        "--num-mcts-sims", type=int, default=50, help="Number of MCTS simulations"
     )
     parser.add_argument(
         "--num-mcts-sims-eval",
         type=int,
-        default=25,
+        default=50,
         help="Number of MCTS simulations for evaluation",
     )
     parser.add_argument(
@@ -281,8 +281,13 @@ def main():
         #         "architecture": "gcn",
         #     },
         # ),
-        ("gcn dropout 0.1", {"architecture": "gcn", "dropout": 0.1,
-                "numMCTSSimsEval": 50, "num_channels": 256}),
+        ("Multiprocessed", {})
+        # ("dropout 0.5", {"architecture": "gcn", "dropout": 0.5,
+        #         "numMCTSSimsEval": 50, "num_channels": 256}),
+        # ("channels 512", {"architecture": "gcn", "dropout": 0.5,
+        #         "numMCTSSimsEval": 50, "num_channels": 512}),
+        # ("numMCTS 100", {"architecture": "gcn", "dropout": 0.5,
+        #         "numMCTSSimsEval": 100, "numMCTSSims":100, "num_channels": 256}),
         # ("gcn dropout 0.5", {"architecture": "gcn", "dropout": 0.5}),
         # (
         #     "gcn MCTS-50",
@@ -293,14 +298,14 @@ def main():
         # ),
         # ("gcn Augmentation-10", {"architecture": "gcn", "augmentationFactor": 10}),
         # ("pointer", {"architecture": "pointer", "num_channels": 128, "dropout": 0.3}),
-        (
-            "transformer",
-            {
-                "architecture": "transformer_deepseek",
-                "num_channels": 512,
-                "dropout": 0.1,
-            },
-        ),
+        # (
+        #     "transformer",
+        #     {
+        #         "architecture": "transformer_deepseek",
+        #         "num_channels": 512,
+        #         "dropout": 0.1,
+        #     },
+        # ),
     ]
 
     # --------------------------------------------------------------------------

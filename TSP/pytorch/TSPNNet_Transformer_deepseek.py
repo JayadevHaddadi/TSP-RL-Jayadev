@@ -6,7 +6,7 @@ class TransformerModel(nn.Module):
     def __init__(self, game, args):
         super().__init__()
         self.args = args
-        self.node_feature_size = 3
+        self.node_feature_size = 4
         self.hidden_dim = 128
         self.nhead = 4
         self.num_layers = 3

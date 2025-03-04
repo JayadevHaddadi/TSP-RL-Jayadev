@@ -14,7 +14,7 @@ class TSPNNet(nn.Module):
         self.action_size = game.getActionSize()
 
         # Node feature size: x,y coords + position in partial tour
-        self.node_feature_size = 3
+        self.node_feature_size = 4
         self.hidden_dim = 128
 
         self.gc1 = nn.Linear(self.node_feature_size, self.hidden_dim)

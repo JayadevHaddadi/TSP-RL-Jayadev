@@ -42,50 +42,45 @@ class NNetWrapper(NeuralNet):
         self.board_size = game.getNumberOfNodes()
         self.action_size = game.getActionSize()
         self.node_coordinates = np.array(game.node_coordinates)
+        coords_min = self.node_coordinates.min(axis=0)
+        coords_max = self.node_coordinates.max(axis=0)
+        self.normalized_coords = (self.node_coordinates - coords_min) / (coords_max - coords_min + 1e-8)
+        # Convert to tensor and move to device upfront
+        self.normalized_coords = torch.FloatTensor(self.normalized_coords)
 
         if self.args.cuda:
+            self.normalized_coords = self.normalized_coords.cuda()
             self.nnet.cuda()
 
     def prepare_input(self, state):
-        # node_features: (num_nodes, 3) - x,y normalized + position in partial tour (0 to 1)
-        # adjacency: connect visited nodes in order; no return to start until end?
         num_nodes = self.board_size
-        coords = self.node_coordinates
-        coords_min = coords.min(axis=0)
-        coords_max = coords.max(axis=0)
-        normalized_coords = (coords - coords_min) / (coords_max - coords_min + 1e-8) # is this necessary at each prepare?
+        normalized_coords = self.normalized_coords  # Use precomputed tensor
 
-        # Tour positions: if length of partial tour = t, node in position k has position = k/(num_nodes-1)
         tour = state.tour
-        t = len(tour)
-        tour_positions = np.zeros(num_nodes)
+        tour_positions = torch.zeros(num_nodes, device=normalized_coords.device)
+        is_visited = torch.zeros(num_nodes, device=normalized_coords.device)
         for idx, node in enumerate(tour):
             if num_nodes > 1:
                 tour_positions[node] = idx / (num_nodes - 1)
             else:
                 tour_positions[node] = 0.0
+            is_visited[node] = 1
 
-        node_features = np.hstack((normalized_coords, tour_positions.reshape(-1, 1))) #FOR NORMAL non GAT
-
-        # adjacency: edges between consecutive visited nodes only
-        adjacency_matrix = np.zeros((num_nodes, num_nodes), dtype=np.float32)
-        for i in range(t - 1):
+        node_features = torch.cat((
+            normalized_coords,
+            tour_positions.unsqueeze(1),
+            is_visited.unsqueeze(1)
+        ), dim=1)
+        
+        # Compute adjacency matrix as a tensor directly
+        adjacency_matrix = torch.zeros((num_nodes, num_nodes), device=normalized_coords.device)
+        for i in range(len(tour) - 1):
             from_node = tour[i]
             to_node = tour[i + 1]
             adjacency_matrix[from_node, to_node] = 1
             adjacency_matrix[to_node, from_node] = 1
 
-        node_features = torch.FloatTensor(node_features)
-        adjacency_matrix = torch.FloatTensor(adjacency_matrix)
-
-        if self.args.cuda:
-            node_features = node_features.cuda()
-            adjacency_matrix = adjacency_matrix.cuda()
-
-        node_features = node_features.unsqueeze(0)  # batch=1
-        adjacency_matrix = adjacency_matrix.unsqueeze(0)
-
-        return node_features, adjacency_matrix
+        return node_features.unsqueeze(0), adjacency_matrix.unsqueeze(0)
 
     def train(self, examples):
         optimizer = optim.Adam(self.nnet.parameters(), lr=self.args.lr)

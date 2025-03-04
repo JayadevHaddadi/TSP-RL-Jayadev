@@ -15,7 +15,7 @@ class TSPNNet_Pointer(nn.Module):
         self.num_nodes = game.getNumberOfNodes()
         self.action_size = game.getActionSize()
 
-        self.node_feature_size = 3
+        self.node_feature_size = 4
         hidden_dim = getattr(args, "num_channels", 128)
 
         # 1) Node embedding

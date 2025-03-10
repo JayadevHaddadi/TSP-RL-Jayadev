@@ -3,44 +3,49 @@ import os
 import logging
 import sys
 
+
 ###################################
 # Utility class AverageMeter
 ###################################
 class AverageMeter(object):
     """From original AlphaZero code: computes and stores the average and current value"""
+
     def __init__(self):
         self.reset()
+
     def reset(self):
-        self.val=0
-        self.avg=0
-        self.sum=0
-        self.count=0
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
     def update(self, val, n=1):
-        self.val=val
-        self.sum+=val*n
-        self.count+=n
-        self.avg=self.sum/self.count
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
 
 
 class dotdict(dict):
     def __getattr__(self, name):
         return self[name]
-    
+
+
 def read_tsplib(filename):
     """
     Reads a TSPLIB file and returns the list of node coordinates.
     """
     node_coords = []
-    with open(filename, 'r') as f:
+    with open(filename, "r") as f:
         lines = f.readlines()
 
     start = False
     for line in lines:
-        if line.strip() == 'NODE_COORD_SECTION':
+        if line.strip() == "NODE_COORD_SECTION":
             start = True
             continue
         if start:
-            if line.strip() == 'EOF':
+            if line.strip() == "EOF":
                 break
             parts = line.strip().split()
             if len(parts) >= 3:
@@ -56,22 +61,24 @@ def read_tsplib(filename):
     normalized_coords = (coords_array - min_coords) / normal
     return normal, normalized_coords.tolist()
 
+
 def read_solutions(filename):
     """
     Reads the solutions file and returns a dictionary of best known tour lengths.
     """
     solutions = {}
-    with open(filename, 'r') as f:
+    with open(filename, "r") as f:
         for line in f:
-            if ':' in line:
-                name, length = line.strip().split(':')
+            if ":" in line:
+                name, length = line.strip().split(":")
                 name = name.strip()
                 try:
                     length = float(length.strip())
                     solutions[name] = length
-                except: 
+                except:
                     pass
     return solutions
+
 
 def write_tsplib(filename, node_coordinates):
     """
@@ -88,20 +95,24 @@ def write_tsplib(filename, node_coordinates):
             f.write(f"{i} {x} {y}\n")
         f.write("EOF\n")
 
+
 def save_node_coordinates(node_coords, filename, NN_length, NN_tour):
     """
     Saves node coordinates and NN tour/length to a file in the TSPLIB format.
     """
-    with open(filename, 'w') as f:
+    with open(filename, "w") as f:
         f.write("NAME: Generated\n")
         f.write("TYPE: TSP\n")
         f.write("DIMENSION: {}\n".format(len(node_coords)))
         f.write("NN_LENGTH: {:.2f}\n".format(NN_length))  # Format NN length as float
-        f.write("NN_TOUR: {}\n".format(" ".join(map(str, NN_tour))))  # Format NN tour as space-separated string
+        f.write(
+            "NN_TOUR: {}\n".format(" ".join(map(str, NN_tour)))
+        )  # Format NN tour as space-separated string
         f.write("NODE_COORD_SECTION\n")
         for idx, (x, y) in enumerate(node_coords, start=1):
             f.write(f"{idx} {x} {y}\n")
         f.write("EOF\n")
+
 
 def compute_nn_tour(coords):
     num_nodes = len(coords)
@@ -109,35 +120,36 @@ def compute_nn_tour(coords):
     current = 0
     tour = [0]  # Start with node 0 as the initial tour
     tour_length = 0.0  # Initialize tour length
-    
+
     for _ in range(num_nodes - 1):
         best_dist = float("inf")
         best_node = None
-        
+
         for node in range(num_nodes):
             if node not in visited:
                 x1, y1 = coords[current]
                 x2, y2 = coords[node]
                 d = np.hypot(x2 - x1, y2 - y1)
-                
+
                 if d < best_dist:
                     best_dist = d
                     best_node = node
-        
+
         visited.add(best_node)
         tour.append(best_node)  # Add the best node to the tour
         tour_length += best_dist  # Add the distance to the tour length
         current = best_node
-    
+
     # Add the last edge from the last visited node back to the starting node (node 0)
     x1, y1 = coords[current]
     x2, y2 = coords[0]  # Starting node
     last_edge = np.hypot(x2 - x1, y2 - y1)
-    
+
     tour_length += last_edge  # Add the last edge length to the tour length
     tour.append(0)  # Add the starting node to close the tour
 
     return tour_length, tour
+
 
 def setup_logging(log_file_path):
     """
@@ -152,7 +164,9 @@ def setup_logging(log_file_path):
         logger.handlers.pop()
 
     # Formatter
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
 
     # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
@@ -165,3 +179,135 @@ def setup_logging(log_file_path):
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
+
+
+def load_tsp_instance(filepath):
+    """
+    Load a TSP instance from a TSPLIB file
+    Returns coordinates and optionally the best known solution length
+    """
+    import numpy as np
+    import logging
+
+    coords = []
+    best_tour_length = None
+
+    with open(filepath, "r") as f:
+        lines = f.readlines()
+
+        # Parse header information
+        i = 0
+        dimension = 0
+        reading_coords = False
+
+        while i < len(lines):
+            line = lines[i].strip()
+
+            if line.startswith("DIMENSION"):
+                dimension = int(line.split()[-1])
+                # Pre-allocate the coords list with the right dimension
+                coords = [[0, 0] for _ in range(dimension)]
+            elif line.startswith("BEST_KNOWN"):
+                best_tour_length = float(line.split()[-1])
+            elif line.startswith("NODE_COORD_SECTION"):
+                reading_coords = True
+                i += 1  # Skip to the next line to start reading coordinates
+            elif reading_coords:
+                if line == "EOF" or line.startswith("DISPLAY_DATA_SECTION"):
+                    break
+
+                parts = line.split()
+                if len(parts) >= 3:  # Node index, x, y
+                    # Convert 1-based index to 0-based index
+                    node_idx = int(parts[0]) - 1
+                    x, y = float(parts[1]), float(parts[2])
+
+                    # Ensure the index is valid
+                    if 0 <= node_idx < len(coords):
+                        coords[node_idx] = [x, y]
+                    else:
+                        logging.warning(
+                            f"Node index {node_idx+1} out of range (dimension: {dimension})"
+                        )
+
+            i += 1
+
+    # Verify all nodes have coordinates
+    if any(x == 0 and y == 0 for x, y in coords):
+        logging.warning(
+            "Some nodes have default [0,0] coordinates, which may indicate missing data"
+        )
+
+    # Normalize coordinates to [0, 1] range if needed
+    if coords:
+        coords = np.array(coords)
+        min_x, min_y = coords[:, 0].min(), coords[:, 1].min()
+        max_x, max_y = coords[:, 0].max(), coords[:, 1].max()
+
+        # Apply normalization
+        coords[:, 0] = (
+            (coords[:, 0] - min_x) / (max_x - min_x) if max_x > min_x else 0.5
+        )
+        coords[:, 1] = (
+            (coords[:, 1] - min_y) / (max_y - min_y) if max_y > min_y else 0.5
+        )
+
+        coords = coords.tolist()
+
+    logging.info(f"Loaded TSP instance with {len(coords)} nodes")
+    if best_tour_length:
+        logging.info(f"Best known solution length: {best_tour_length}")
+
+    return coords, best_tour_length
+
+
+def log_configuration(args):
+    """
+    Log all configuration parameters for reference.
+
+    Args:
+        args: Dictionary or dotdict containing configuration parameters
+    """
+    if not isinstance(args, dotdict):
+        args = dotdict(args)
+
+    logging.info("=" * 50)
+    logging.info("CONFIGURATION PARAMETERS:")
+    logging.info("=" * 50)
+
+    # TSP parameters
+    logging.info("TSP PARAMETERS:")
+    logging.info(f"  TSP Instance: {args.tsp_instance}")
+    logging.info(f"  Number of Nodes: {args.num_nodes}")
+
+    # Neural network parameters
+    logging.info("NEURAL NETWORK PARAMETERS:")
+    logging.info(f"  Architecture: {args.architecture}")
+    logging.info(f"  Dropout: {args.dropout}")
+    logging.info(f"  Learning Rate: {args.lr}")
+    logging.info(f"  Number of Channels: {args.num_channels}")
+    logging.info(f"  Max Gradient Norm: {args.max_gradient_norm}")
+
+    # Training parameters
+    logging.info("TRAINING PARAMETERS:")
+    logging.info(f"  Number of Iterations: {args.numIters}")
+    logging.info(f"  Episodes per Iteration: {args.numEps}")
+    logging.info(f"  Epochs: {args.epochs}")
+    logging.info(f"  Batch Size: {args.batch_size}")
+    logging.info(f"  History Iterations: {args.numItersForTrainExamplesHistory}")
+    logging.info(f"  Augmentation Factor: {args.augmentationFactor}")
+
+    # MCTS parameters
+    logging.info("MCTS PARAMETERS:")
+    logging.info(f"  MCTS Simulations: {args.numMCTSSims}")
+    logging.info(f"  MCTS Eval Simulations: {args.numMCTSSimsEval}")
+    logging.info(f"  Max Queue Length: {args.maxlenOfQueue}")
+    logging.info(f"  CPUCT: {args.cpuct}")
+
+    # Other parameters
+    logging.info("OTHER PARAMETERS:")
+    logging.info(f"  CUDA: {args.cuda}")
+    logging.info(f"  Visualize: {args.visualize}")
+    logging.info(f"  Read from File: {args.read_from_file}")
+    logging.info(f"  Load Model: {args.load_model}")
+    logging.info("=" * 50)

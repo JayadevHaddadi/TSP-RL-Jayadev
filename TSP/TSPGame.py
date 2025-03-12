@@ -11,17 +11,65 @@ import logging
 
 log = logging.getLogger(__name__)
 
+
 class TSPGame:
-    def __init__(self, num_nodes, node_coordinates, args=None):
+    def __init__(self, num_nodes, node_coordinates, node_type="rand", args=None):
         self.num_nodes = num_nodes
         self.node_coordinates = node_coordinates
-        self.node_type = None
+        self.node_type = node_type
         self.args = args
-        
+
+        # Now this will use the correct distance calculation
+        self.distance_matrix = self._compute_distance_matrix()
+
+    def _compute_distance_matrix(self):
+        """Precompute all pairwise distances"""
+        n = self.num_nodes
+        mat = np.zeros((n, n))
+
+        # Log which distance calculation we're using
+        logging.info(f"Computing {self.node_type} distance matrix")
+
+        for i in range(n):
+            for j in range(n):
+                mat[i][j] = self._calculate_distance(i, j)
+
+        # Log sample distances for verification
+        if n >= 2:
+            logging.info(f"Sample distance [0][1]: {mat[0][1]}")
+            logging.info(f"Sample distance [1][0]: {mat[1][0]}")
+        return mat
+
+    def _calculate_distance(self, i, j):
+        """Calculate distance between two nodes (used for matrix precomputation)"""
+        if self.node_type == "tsplib":
+            # GEO calculation for TSPLIB instances
+            PI = 3.141592
+            x1, y1 = self.node_coordinates[i]
+            x2, y2 = self.node_coordinates[j]
+
+            lat1 = x1 * PI / 180.0
+            long1 = y1 * PI / 180.0
+            lat2 = x2 * PI / 180.0
+            long2 = y2 * PI / 180.0
+
+            RRR = 6378.388
+            q1 = np.cos(long1 - long2)
+            q2 = np.cos(lat1 - lat2)
+            q3 = np.cos(lat1 + lat2)
+            dist = RRR * np.arccos(0.5 * ((1.0 + q1) * q2 - (1.0 - q1) * q3)) + 1.0
+            return np.round(dist)
+        else:
+            # Euclidean distance for random instances
+            x1, y1 = self.node_coordinates[i]
+            x2, y2 = self.node_coordinates[j]
+            return np.hypot(x2 - x1, y2 - y1)
+
     def getInitState(self):
-        # no "randomize_start" needed
-        # create a TSPState with an EMPTY tour:
-        s = TSPState(self.num_nodes, self.node_coordinates)
+        # Pass both coordinates and distance matrix to the state
+        s = TSPState(self.num_nodes, self.node_coordinates, self.distance_matrix)
+        if hasattr(self, "node_type"):
+            s.node_type = self.node_type
         return s
 
     def getNumberOfNodes(self):
@@ -57,7 +105,7 @@ class TSPGame:
 
     def uniqueStringRepresentation(self, state: TSPState):
         """
-        Return the string representation of the partial tour exactly 
+        Return the string representation of the partial tour exactly
         as stored in state.tour, with no rotation or reversal.
         """
         tour = state.tour

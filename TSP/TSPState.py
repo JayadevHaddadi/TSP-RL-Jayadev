@@ -1,12 +1,14 @@
 import numpy as np
 
+
 class TSPState:
-    def __init__(self, num_nodes, node_coordinates):
+    def __init__(self, num_nodes, node_coordinates, distance_matrix):
         self.num_nodes = num_nodes
         self.node_coordinates = node_coordinates
+        self.distance_matrix = distance_matrix
         self.tour = []  # empty
         self.unvisited = np.ones(num_nodes, dtype=int)  # all nodes unvisited
-        self.current_length = 0.0        
+        self.current_length = 0.0
 
     def execute_action(self, action):
         """
@@ -52,8 +54,9 @@ class TSPState:
         elif remaining_unvisited == 0:
             # If code logic is correct, we should never see exactly 0 unvisited
             # immediately after an action, because we handle the last node above.
-            raise Exception("Should never have 0 remaining nodes after doing an action.")
-
+            raise Exception(
+                "Should never have 0 remaining nodes after doing an action."
+            )
 
     def is_terminal(self):
         # Terminal if sum of unvisited = 0 (no unvisited nodes)
@@ -69,6 +72,9 @@ class TSPState:
         return sorted(list(self.unvisited))
 
     def distance(self, i, j):
-        x1, y1 = self.node_coordinates[i]
-        x2, y2 = self.node_coordinates[j]
-        return np.hypot(x2 - x1, y2 - y1)
+        """Get precomputed distance between nodes i and j"""
+        # Safety check for indices
+        if i < 0 or i >= self.num_nodes or j < 0 or j >= self.num_nodes:
+            raise IndexError(f"Invalid node indices: {i}, {j}")
+
+        return self.distance_matrix[i][j]

@@ -79,6 +79,7 @@ class MCTS:
             if sum_Ps_s > 0:
                 self.Ps[state_string] /= sum_Ps_s
             else:
+                print(self.Ps[state_string])
                 log.error("All valid moves were masked, assigning equal probabilities.")
                 self.Ps[state_string] = self.Ps[state_string] + valids
                 self.Ps[state_string] /= np.sum(self.Ps[state_string])

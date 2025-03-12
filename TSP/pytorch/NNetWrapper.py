@@ -1,5 +1,6 @@
 import os
 import sys
+import logging
 
 import numpy as np
 from tqdm import tqdm
@@ -12,6 +13,8 @@ from NeuralNet import NeuralNet
 
 import torch
 import torch.optim as optim
+import torch.nn as nn
+import torch.nn.functional as F
 
 
 ###################################
@@ -22,14 +25,6 @@ class NNetWrapper(NeuralNet):
         # Change all args.architecture to args['architecture']
         if args.get("architecture", "default") == "pointer":
             from .TSPNNet_Pointer import TSPNNet_Pointer
-
-            self.nnet = TSPNNet_Pointer(game, args)
-        elif args.get("architecture") == "gat":
-            from .TSPNNet_GAT import TSPNNet_GAT
-
-            self.nnet = TSPNNet_GAT(game, args)
-        elif args.get("architecture") == "gat_deepseek":
-            from .TSPNNet_GAT_deepseek import TSPNNet
 
             self.nnet = TSPNNet(game, args)
         elif args.get("architecture") == "transformer_deepseek":
@@ -59,6 +54,11 @@ class NNetWrapper(NeuralNet):
         if self.args.cuda:
             self.normalized_coords = self.normalized_coords.cuda()
             self.nnet.cuda()
+
+        # Modify the policy head initialization
+        self.fc_pi = nn.Linear(args.num_channels, self.action_size)
+        nn.init.kaiming_normal_(self.fc_pi.weight, mode="fan_out", nonlinearity="relu")
+        nn.init.constant_(self.fc_pi.bias, 0.0)
 
     def prepare_input(self, state):
         num_nodes = self.board_size
@@ -167,8 +167,13 @@ class NNetWrapper(NeuralNet):
         self.nnet.eval()
         with torch.no_grad():
             nf, adj = self.prepare_input(state)
-            out_pi, out_v = self.nnet(nf, adj)
-            pi = out_pi.cpu().numpy()[0]
+            raw_logits, out_v = self.nnet(nf, adj)
+            # Show actual raw logits before any transformations
+            logging.info(f"Raw logits: {raw_logits.cpu().numpy()[0]}")
+            # Apply softmax for probability conversion
+            pi = (
+                F.softmax(raw_logits / 2.0, dim=1).cpu().numpy()[0]
+            )  # Explicit temperature
             v = out_v.cpu().item()
             return pi, v
 
@@ -187,9 +192,17 @@ class NNetWrapper(NeuralNet):
         self.nnet.load_state_dict(checkpoint)
 
     def loss_pi(self, targets, outputs):
-        loss = -torch.sum(targets * torch.log(outputs + 1e-8)) / targets.size(0)
+        # Fix numerical stability by using log_softmax directly
+        log_probs = F.log_softmax(outputs, dim=1)
+        loss = -torch.sum(targets * log_probs) / targets.size(0)
         return loss
 
     def loss_v(self, targets, outputs):
         loss = torch.sum((targets - outputs.view(-1)) ** 2) / targets.size(0)
         return loss
+
+    def forward(self, x):
+        pi = self.fc_pi(x)
+        pi = torch.clamp(pi, min=-50, max=50)  # Prevent extreme values
+        pi = pi / 2.0  # Temperature scaling
+        return pi, F.tanh(self.fc_v(x))

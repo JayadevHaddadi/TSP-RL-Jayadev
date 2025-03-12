@@ -43,19 +43,10 @@ def run_experiment(args, run_folder, coords_for_eval, nn_lengths_for_eval):
         # Load specific TSP instance
         logging.info(f"Loading TSP instance from: {args.tsp_instance}")
         init_coords, best_tour_length = load_tsp_instance(args.tsp_instance)
-        # Use the actual number of nodes from the loaded coordinates
         num_nodes = len(init_coords)
 
-        # Validate coordinates before creating the game
-        if not init_coords or not all(
-            isinstance(coord, list) and len(coord) == 2 for coord in init_coords
-        ):
-            logging.error(f"Invalid coordinates format: {init_coords}")
-            return
-
-        logging.info(f"TSP instance loaded with {num_nodes} nodes")
-        game = TSPGame(num_nodes, init_coords, args)
-        game.node_type = "tsplib"
+        # Create game with explicit node_type
+        game = TSPGame(num_nodes, init_coords, node_type="tsplib", args=args)
     else:
         # Use random coordinates
         init_coords = np.random.rand(num_nodes, 2).tolist()
@@ -150,6 +141,9 @@ def main():
             "burma14 normal",  # Name of the experiment
             {
                 # Override any parameters from base_args here
+                "numMCTSSims": 25,
+                "numMCTSSimsEval": 25,
+                "numEps": 5,
                 "tsp_instance": "tsplib/burma14.tsp",
             },
         ),

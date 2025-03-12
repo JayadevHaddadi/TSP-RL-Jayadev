@@ -191,70 +191,48 @@ def load_tsp_instance(filepath):
 
     coords = []
     best_tour_length = None
+    dimension = 0
+    reading_coords = False
 
     with open(filepath, "r") as f:
-        lines = f.readlines()
+        for line in f:
+            line = line.strip()
 
-        # Parse header information
-        i = 0
-        dimension = 0
-        reading_coords = False
-
-        while i < len(lines):
-            line = lines[i].strip()
-
+            # Process header information
             if line.startswith("DIMENSION"):
                 dimension = int(line.split()[-1])
-                # Pre-allocate the coords list with the right dimension
-                coords = [[0, 0] for _ in range(dimension)]
             elif line.startswith("BEST_KNOWN"):
                 best_tour_length = float(line.split()[-1])
+            # Start reading coordinates
             elif line.startswith("NODE_COORD_SECTION"):
                 reading_coords = True
-                i += 1  # Skip to the next line to start reading coordinates
+                coords = []  # Initialize empty list for coordinates
+            # End of file
+            elif line == "EOF" or line.startswith("DISPLAY_DATA_SECTION"):
+                break
+            # Read coordinates if we're in the coordinates section
             elif reading_coords:
-                if line == "EOF" or line.startswith("DISPLAY_DATA_SECTION"):
-                    break
-
                 parts = line.split()
                 if len(parts) >= 3:  # Node index, x, y
-                    # Convert 1-based index to 0-based index
-                    node_idx = int(parts[0]) - 1
                     x, y = float(parts[1]), float(parts[2])
+                    coords.append([x, y])
 
-                    # Ensure the index is valid
-                    if 0 <= node_idx < len(coords):
-                        coords[node_idx] = [x, y]
-                    else:
-                        logging.warning(
-                            f"Node index {node_idx+1} out of range (dimension: {dimension})"
-                        )
+    # Debug information
+    logging.info(f"Read {len(coords)} coordinates from file with dimension {dimension}")
 
-            i += 1
+    # Verify we got the expected number of nodes
+    if dimension > 0 and len(coords) != dimension:
+        logging.warning(f"Expected {dimension} nodes but got {len(coords)}")
 
-    # Verify all nodes have coordinates
-    if any(x == 0 and y == 0 for x, y in coords):
-        logging.warning(
-            "Some nodes have default [0,0] coordinates, which may indicate missing data"
-        )
+        # Print the first few coordinates for debugging
+        if coords:
+            logging.info(f"First coordinate: {coords[0]}")
+            if len(coords) > 1:
+                logging.info(f"Second coordinate: {coords[1]}")
 
-    # Normalize coordinates to [0, 1] range if needed
-    if coords:
-        coords = np.array(coords)
-        min_x, min_y = coords[:, 0].min(), coords[:, 1].min()
-        max_x, max_y = coords[:, 0].max(), coords[:, 1].max()
-
-        # Apply normalization
-        coords[:, 0] = (
-            (coords[:, 0] - min_x) / (max_x - min_x) if max_x > min_x else 0.5
-        )
-        coords[:, 1] = (
-            (coords[:, 1] - min_y) / (max_y - min_y) if max_y > min_y else 0.5
-        )
-
-        coords = coords.tolist()
-
-    logging.info(f"Loaded TSP instance with {len(coords)} nodes")
+    logging.info(
+        f"Loaded TSP instance with {len(coords)} nodes (using raw coordinates)"
+    )
     if best_tour_length:
         logging.info(f"Best known solution length: {best_tour_length}")
 

@@ -17,9 +17,10 @@ from utils import *
 
 log = logging.getLogger(__name__)
 
+
 class Coach:
     def __init__(
-        self, 
+        self,
         game: TSPGame,
         nnet: NNetWrapper,
         args,
@@ -48,13 +49,15 @@ class Coach:
 
         # We'll store final length per iteration *per evaluation set* in a 2D structure:
         # shape (n_eval_sets, n_iterations)
-        self.eval_set_lengths_history = []  # Will append an array of size n_eval_sets each iteration.
+        self.eval_set_lengths_history = (
+            []
+        )  # Will append an array of size n_eval_sets each iteration.
 
         self.mcts = MCTS(self.game, self.nnet, self.args)
         self.trainExamplesHistory = []
 
         # Track best average length across stable sets
-        self.best_avg_length = float('inf')
+        self.best_avg_length = float("inf")
 
         # Logging for losses
         self.iteration_pi_loss_history = []
@@ -65,14 +68,16 @@ class Coach:
         self.losses_file = os.path.join(self.folder, "losses.csv")
         with open(self.losses_file, "w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(["Iteration", "Epoch", "Batch", "Policy Loss", "Value Loss"])
+            writer.writerow(
+                ["Iteration", "Epoch", "Batch", "Policy Loss", "Value Loss"]
+            )
 
         # Optionally run a pre-training eval
         self.preTrainingEval()
 
     ###############################################################################
     # 1) Updated 'preTrainingEval' method to match the same folder structure
-    #    and naming conventions as after training. 
+    #    and naming conventions as after training.
     ###############################################################################
     def preTrainingEval(self):
         """
@@ -134,7 +139,7 @@ class Coach:
             self.game.plotTour(
                 state,
                 title=f"PreEval Set {idx+1} (Len={length:.4f})",
-                save_path=out_path
+                save_path=out_path,
             )
 
         # Average
@@ -162,12 +167,12 @@ class Coach:
 
         final_len = self.game.getTourLength(state)
         examples = []
-        for (st, pi) in trajectory:
+        for st, pi in trajectory:
             leftover = final_len - st.current_length
             examples.append((st, pi, leftover))
 
         return examples
-    
+
     def learn(self):
         for i in range(1, self.args.numIters + 1):
             log.info(f"=== Starting Iter #{i} ===")
@@ -176,8 +181,10 @@ class Coach:
             # Self-play
             for _ in tqdm(range(self.args.numEps), desc="Self Play"):
                 self.mcts = MCTS(self.game, self.nnet, self.args)
-                episode_data = self.executeEpisode()  # list of (state, pi, leftover_dist)
-                
+                episode_data = (
+                    self.executeEpisode()
+                )  # list of (state, pi, leftover_dist)
+
                 # *** AUGMENT BEFORE ADDING TO iterationTrainExamples ***
                 if getattr(self.args, "augmentationFactor", 1) > 1:
                     augmented_data = self.augmentExamples(episode_data)
@@ -188,7 +195,10 @@ class Coach:
             # Now add the iterationTrainExamples to trainExamplesHistory
             self.trainExamplesHistory.append(iterationTrainExamples)
 
-            if len(self.trainExamplesHistory) > self.args.numItersForTrainExamplesHistory:
+            if (
+                len(self.trainExamplesHistory)
+                > self.args.numItersForTrainExamplesHistory
+            ):
                 log.warning("Removing oldest entry in trainExamplesHistory.")
                 self.trainExamplesHistory.pop(0)
 
@@ -207,7 +217,7 @@ class Coach:
 
             # Evaluate on stable coords, etc...
             eval_lens = self.evaluateAllCoords()
-            avg_len = float(np.mean(eval_lens)) if eval_lens else float('inf')
+            avg_len = float(np.mean(eval_lens)) if eval_lens else float("inf")
             self.eval_avg_length_history.append(avg_len)
             self.eval_set_lengths_history.append(eval_lens)
 
@@ -226,9 +236,8 @@ class Coach:
 
             # Plot one or all stable sets?
             # If you want to plot all sets every X iterations
-            do_full_plot = (
-                hasattr(self.args, "plot_all_eval_sets_interval") and
-                (i % self.args.plot_all_eval_sets_interval == 0)
+            do_full_plot = hasattr(self.args, "plot_all_eval_sets_interval") and (
+                i % self.args.plot_all_eval_sets_interval == 0
             )
             if do_full_plot and self.coords_for_eval:
                 self.plotAllEvalTours(i)
@@ -259,7 +268,7 @@ class Coach:
             return original_data
 
         augmented = []
-        for (state, pi, leftover) in original_data:
+        for state, pi, leftover in original_data:
             # Always keep the original
             augmented.append((state, pi, leftover))
 
@@ -267,22 +276,24 @@ class Coach:
                 # 1) Apply a random permutation
                 permuted_state, permuted_pi = self.applyRandomPermutation(state, pi)
                 # 2) Apply rotation about (0.5, 0.5)
-                rotated_state, rotated_pi = self.applyCenterRotation(permuted_state, permuted_pi)
+                rotated_state, rotated_pi = self.applyCenterRotation(
+                    permuted_state, permuted_pi
+                )
                 # leftover remains the same if distance truly unchanged
                 augmented.append((rotated_state, rotated_pi, leftover))
 
         return augmented
-    
+
     def applyRandomPermutation(self, state, pi):
         """
-        Randomly permute labels [0..n-1]. 
+        Randomly permute labels [0..n-1].
         We create new TSPState, reorder node coords accordingly,
         reorder the partial tour, and fix the unvisited array.
         Also reorder the pi distribution.
         """
         n = state.num_nodes
         perm = np.random.permutation(n)  # e.g. [2,0,1,...]
-        
+
         old_coords = np.array(state.node_coordinates)
         new_coords = old_coords[perm].tolist()
 
@@ -297,6 +308,7 @@ class Coach:
                 new_unvisited[new_lbl] = 1
 
         from TSP.TSPState import TSPState
+
         new_state = TSPState(n, new_coords)
         new_state.tour = new_tour
         new_state.unvisited = new_unvisited
@@ -310,47 +322,47 @@ class Coach:
         for old_label, prob in enumerate(pi):
             new_label = perm[old_label]
             new_pi[new_label] = prob
-        
+
         return new_state, new_pi
 
     def applyCenterRotation(self, state, pi):
         """
         Rotate all coordinates about (0.5, 0.5) by a random angle in [0, 2*pi).
-        Distances remain the same if TSP is in [0,1]^2. 
-        We keep the same node labeling (tour/unvisited). 
+        Distances remain the same if TSP is in [0,1]^2.
+        We keep the same node labeling (tour/unvisited).
         pi does not need label reorder, just the same array.
 
-        If you want partial cost to remain identical, 
-        either recalc or trust that the TSP code uses purely index-based cost 
+        If you want partial cost to remain identical,
+        either recalc or trust that the TSP code uses purely index-based cost
         => same leftover is valid if everything in [0,1]^2 doesn't break distance.
         """
-        angle = np.random.uniform(0, 2*np.pi)
+        angle = np.random.uniform(0, 2 * np.pi)
         cosA, sinA = np.cos(angle), np.sin(angle)
 
         coords = state.node_coordinates
         rotated_coords = []
-        for (x, y) in coords:
+        for x, y in coords:
             # shift center to (0.0,0.0)
             dx = x - 0.5
             dy = y - 0.5
             # rotate
-            rx = dx*cosA - dy*sinA
-            ry = dx*sinA + dy*cosA
+            rx = dx * cosA - dy * sinA
+            ry = dx * sinA + dy * cosA
             # shift back
             rx += 0.5
             ry += 0.5
             rotated_coords.append([rx, ry])
 
         from TSP.TSPState import TSPState
+
         new_state = TSPState(state.num_nodes, rotated_coords)
         new_state.tour = list(state.tour)
         new_state.unvisited = state.unvisited.copy()
-        # new_state.current_length = state.current_length 
+        # new_state.current_length = state.current_length
         # or if TSP code automatically re-checks distances, do:
         # new_state.current_length = self.recomputeTourLength(new_state)
 
         return new_state, np.array(pi, copy=True)
-
 
     def evaluateAllCoords(self):
         """
@@ -358,7 +370,9 @@ class Coach:
         Return a list of final lengths, one per eval set.
         """
         if not self.coords_for_eval:
-            log.info("No coords_for_eval => skipping stable evaluation => returning empty list")
+            log.info(
+                "No coords_for_eval => skipping stable evaluation => returning empty list"
+            )
             return []
 
         original_sims = self.args.numMCTSSims
@@ -434,7 +448,7 @@ class Coach:
             self.game.plotTour(
                 state,
                 title=f"EvalSet {idx+1}, Iter={iteration}, Len={length:.4f}",
-                save_path=out_path
+                save_path=out_path,
             )
 
         self.args.numMCTSSims = original_sims
@@ -473,9 +487,7 @@ class Coach:
         out_path = os.path.join(tours_folder, filename)
 
         self.game.plotTour(
-            state,
-            title=f"Set1, Iter={iteration}, Len={length:.4f}",
-            save_path=out_path
+            state, title=f"Set1, Iter={iteration}, Len={length:.4f}", save_path=out_path
         )
 
         self.args.numMCTSSims = original_sims
@@ -490,25 +502,31 @@ class Coach:
         fig, (axL, axR) = plt.subplots(1, 2, figsize=(12, 6))
 
         # Left: stable eval length over iterations
-        axL.plot(iters, self.eval_avg_length_history, label='Eval Avg Length', color='green')
-        axL.set_xlabel('Iteration')
-        axL.set_ylabel('Final Tour Length')
-        axL.set_title('Eval Tour Length (Stable) Over Iterations')
+        axL.plot(
+            iters, self.eval_avg_length_history, label="Eval Avg Length", color="green"
+        )
+        axL.set_xlabel("Iteration")
+        axL.set_ylabel("Final Tour Length")
+        axL.set_title("Eval Tour Length (Stable) Over Iterations")
         axL.legend()
 
         # Right: policy + value loss
         ax1 = axR
-        ax1.plot(iters, self.iteration_pi_loss_history, label='Policy Loss', color='blue')
-        ax1.set_xlabel('Iteration')
-        ax1.set_ylabel('Policy Loss', color='blue')
-        ax1.tick_params(axis='y', labelcolor='blue')
-        ax1.legend(loc='upper left')
+        ax1.plot(
+            iters, self.iteration_pi_loss_history, label="Policy Loss", color="blue"
+        )
+        ax1.set_xlabel("Iteration")
+        ax1.set_ylabel("Policy Loss", color="blue")
+        ax1.tick_params(axis="y", labelcolor="blue")
+        ax1.legend(loc="upper left")
 
         ax2 = ax1.twinx()
-        ax2.plot(iters, self.iteration_v_loss_history, label='Value Loss', color='orange')
-        ax2.set_ylabel('Value Loss', color='orange')
-        ax2.tick_params(axis='y', labelcolor='orange')
-        ax2.set_yscale('log')
+        ax2.plot(
+            iters, self.iteration_v_loss_history, label="Value Loss", color="orange"
+        )
+        ax2.set_ylabel("Value Loss", color="orange")
+        ax2.tick_params(axis="y", labelcolor="orange")
+        ax2.set_yscale("log")
 
         # If we have enough data, skip the first 5 from the range
         if len(self.iteration_v_loss_history) > 5:
@@ -518,7 +536,7 @@ class Coach:
             max_tail = max(tail_vals)
             ax2.set_ylim(min_tail * 0.8, max_tail * 1.2)  # some margin
 
-        ax2.legend(loc='upper right')
+        ax2.legend(loc="upper right")
 
         fig.suptitle(f"Iter {iteration}: EvalLen={eval_len:.4f}", fontsize=14)
         fig.tight_layout()
@@ -550,18 +568,20 @@ class Coach:
         cols = 4
         rows = (n_sets + cols - 1) // cols  # ceiling division
 
-        fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows), squeeze=False)
+        fig, axes = plt.subplots(
+            rows, cols, figsize=(5 * cols, 4 * rows), squeeze=False
+        )
         axes = axes.flatten()  # flatten so we can index easily
 
         for idx in range(n_sets):
             lengths_for_this_set = [hist[idx] for hist in self.eval_set_lengths_history]
             ax = axes[idx]
-            ax.plot(x, lengths_for_this_set, marker='o', label=f"EvalSet {idx+1}")
+            ax.plot(x, lengths_for_this_set, marker="o", label=f"EvalSet {idx+1}")
 
             # if we have NN length
             if idx < len(self.nn_lengths_for_eval):
                 nn_len = self.nn_lengths_for_eval[idx]
-                ax.axhline(y=nn_len, color='red', linestyle='--', label='NN Length')
+                ax.axhline(y=nn_len, color="red", linestyle="--", label="NN Length")
 
             ax.set_ylabel("Tour Length")
             ax.set_title(f"Set {idx+1} Over Iterations")
@@ -605,3 +625,8 @@ class Coach:
             with open(examplesFile, "rb") as f:
                 self.trainExamplesHistory = Pickler.load(f)
             log.info("Loading done!")
+
+            os.makedirs(folder)
+        filename = os.path.join(folder, "checkpoint.examples")
+        with open(filename, "wb") as f:
+            Pickler(f).dump(self.trainExamplesHistory)

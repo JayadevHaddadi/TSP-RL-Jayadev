@@ -169,7 +169,7 @@ class NNetWrapper(NeuralNet):
             nf, adj = self.prepare_input(state)
             raw_logits, out_v = self.nnet(nf, adj)
             # Show actual raw logits before any transformations
-            logging.info(f"Raw logits: {raw_logits.cpu().numpy()[0]}")
+            # logging.info(f"Raw logits: {raw_logits.cpu().numpy()[0]}")
             # Apply softmax for probability conversion
             pi = (
                 F.softmax(raw_logits / 2.0, dim=1).cpu().numpy()[0]

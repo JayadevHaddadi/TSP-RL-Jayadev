@@ -103,6 +103,7 @@ def main():
     # Direct assignment of configuration values to base_args
     base_args = dotdict(
         {
+            "base_folder": ".",
             # TSP instance parameters
             "tsp_instance": "tsplib/burma14.tsp",  # Set to None for random TSP
             "num_nodes": 20,  # Only used if tsp_instance is None
@@ -163,7 +164,8 @@ def main():
 
     if base_args.tsp_instance:
         # Use the specific TSP instance for evaluation
-        instance_coords, _ = load_tsp_instance(base_args.tsp_instance)
+        tsp_instance = os.path.join(base_args.base_folder, base_args.tsp_instance)
+        instance_coords, _ = load_tsp_instance(tsp_instance)
 
         # Ensure instance_coords is properly formatted
         if instance_coords and all(
@@ -206,6 +208,7 @@ def main():
         else:
             run_name = f"{run_timestamp}_{these_args['num_nodes']}_{arch_name}"
 
+        run_folder = os.path.join(base_args.base_folder, run_name)
         run_folder = os.path.join("runs", run_name)
         os.makedirs(run_folder, exist_ok=True)
 

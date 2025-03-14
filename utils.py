@@ -262,7 +262,7 @@ def log_configuration(args):
     logging.info("NEURAL NETWORK PARAMETERS:")
     logging.info(f"  Architecture: {args.architecture}")
     logging.info(f"  Dropout: {args.dropout}")
-    logging.info(f"  Learning Rate: {args.lr}")
+    logging.info(f"  Learning Rate: {args.learning_rate}")
     logging.info(f"  Number of Channels: {args.num_channels}")
     logging.info(f"  Max Gradient Norm: {args.max_gradient_norm}")
 

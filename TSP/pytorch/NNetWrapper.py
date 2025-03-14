@@ -59,6 +59,7 @@ class NNetWrapper(NeuralNet):
         self.fc_pi = nn.Linear(args.num_channels, self.action_size)
         nn.init.kaiming_normal_(self.fc_pi.weight, mode="fan_out", nonlinearity="relu")
         nn.init.constant_(self.fc_pi.bias, 0.0)
+        self.print_model_info()
 
     def prepare_input(self, state):
         num_nodes = self.board_size
@@ -95,7 +96,7 @@ class NNetWrapper(NeuralNet):
         return node_features.unsqueeze(0), adjacency_matrix.unsqueeze(0)
 
     def train(self, examples):
-        optimizer = optim.Adam(self.nnet.parameters(), lr=self.args.lr)
+        optimizer = optim.Adam(self.nnet.parameters(), lr=self.args.learning_rate)
 
         pi_loss_list = []
         v_loss_list = []
@@ -206,3 +207,10 @@ class NNetWrapper(NeuralNet):
         pi = torch.clamp(pi, min=-50, max=50)  # Prevent extreme values
         pi = pi / 2.0  # Temperature scaling
         return pi, F.tanh(self.fc_v(x))
+
+    def print_model_info(self):
+        """Prints the full architecture of the neural network and its total parameter count."""
+
+        total_params = sum(p.numel() for p in self.nnet.parameters())
+        logging.info("Neural network architecture:\n%s", str(self.nnet))
+        logging.info("Total parameter count: %d", total_params)

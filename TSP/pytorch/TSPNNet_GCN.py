@@ -4,54 +4,214 @@ import torch.nn.functional as F
 
 from TSP.TSPGame import TSPGame
 
+
 class TSPNNet(nn.Module):
     def __init__(self, game: TSPGame, args):
         super(TSPNNet, self).__init__()
         self.args = args
-        self.num_nodes = game.getNumberOfNodes()
-        # Actions: choose next node from remaining unvisited.
-        # max action size = num_nodes-1
+        self.board_size = game.getNumberOfNodes()
         self.action_size = game.getActionSize()
 
-        # Node feature size: x,y coords + position in partial tour
-        self.node_feature_size = 4
-        self.hidden_dim = 128
+        # Input dimensions
+        self.input_dim = 4  # x, y, tour_position, visited
+        self.embedding_dim = args.embedding_dim
 
-        self.gc1 = nn.Linear(self.node_feature_size, self.hidden_dim)
-        self.gc2 = nn.Linear(self.hidden_dim, self.hidden_dim)
+        # Initial embedding layer
+        self.embedding = nn.Linear(self.input_dim, self.embedding_dim)
 
-        self.fc1 = nn.Linear(self.hidden_dim, 256)
-        self.fc2 = nn.Linear(256, 128)
+        # Edge features if enabled
+        self.use_edge_features = args.use_edge_features
+        if self.use_edge_features:
+            self.edge_embedding = nn.Linear(1, args.edge_dim)
+            self.edge_proj = nn.Linear(args.edge_dim, self.embedding_dim)
 
-        self.fc_pi = nn.Linear(128, self.action_size)
-        self.fc_v = nn.Linear(128, 1)
+        # Graph Convolution Layers
+        self.conv_layers = nn.ModuleList()
+        self.layer_norms = nn.ModuleList()
 
-    def forward(self, node_features, adjacency_matrix):
-        x = self.graph_conv(node_features, adjacency_matrix, self.gc1)
-        x = F.relu(x)
-        x = F.dropout(x, p=self.args.dropout, training=self.training)
+        current_dim = self.embedding_dim
+        for _ in range(args.num_layers):
+            # GCN layer
+            layer = nn.Linear(current_dim, args.num_channels)
+            self.conv_layers.append(layer)
 
-        x = self.graph_conv(x, adjacency_matrix, self.gc2)
-        x = F.relu(x)
-        x = F.dropout(x, p=self.args.dropout, training=self.training)
+            # Layer normalization if enabled
+            if args.layer_norm:
+                self.layer_norms.append(nn.LayerNorm(args.num_channels))
 
-        x = x.mean(dim=1)  # mean pooling
+            current_dim = args.num_channels
 
-        x = F.relu(self.fc1(x))
-        x = F.dropout(x, p=self.args.dropout, training=self.training)
-        x = F.relu(self.fc2(x))
-        x = F.dropout(x, p=self.args.dropout, training=self.training)
+        # Batch normalization if enabled
+        self.use_batch_norm = args.batch_norm
+        if self.use_batch_norm:
+            self.batch_norms = nn.ModuleList(
+                [nn.BatchNorm1d(args.num_channels) for _ in range(args.num_layers)]
+            )
 
-        pi = self.fc_pi(x)
-        pi = F.softmax(pi, dim=1)
+        # Skip connections if enabled
+        self.use_skip = args.skip_connections
+        if self.use_skip and self.embedding_dim != args.num_channels:
+            self.skip_proj = nn.Linear(self.embedding_dim, args.num_channels)
 
-        v = self.fc_v(x)
+        # Global pooling
+        self.global_pool = args.global_pool
 
-        return pi, v
+        # Readout MLP
+        readout_layers = []
+        current_dim = args.num_channels
 
-    def graph_conv(self, node_features, adjacency_matrix, linear_layer):
+        # Handle the case where readout_layers is 1
+        if args.readout_layers <= 1:
+            self.readout = nn.Identity()
+        else:
+            for _ in range(args.readout_layers - 1):
+                readout_layers.extend(
+                    [
+                        nn.Linear(current_dim, args.readout_dim),
+                        self.get_activation(),
+                        nn.Dropout(args.dropout),
+                    ]
+                )
+                current_dim = args.readout_dim
+            self.readout = nn.Sequential(*readout_layers)
+
+        # Policy head (ensure at least one layer)
+        policy_layers = []
+        current_dim = args.readout_dim if args.readout_layers > 1 else args.num_channels
+        if args.policy_layers <= 1:
+            policy_layers.append(nn.Linear(current_dim, self.action_size))
+        else:
+            for _ in range(args.policy_layers - 1):
+                policy_layers.extend(
+                    [
+                        nn.Linear(current_dim, args.policy_dim),
+                        self.get_activation(),
+                        nn.Dropout(args.dropout),
+                    ]
+                )
+                current_dim = args.policy_dim
+            policy_layers.append(nn.Linear(current_dim, self.action_size))
+        self.policy_head = nn.Sequential(*policy_layers)
+
+        # Value head (ensure at least one layer)
+        value_layers = []
+        current_dim = args.readout_dim if args.readout_layers > 1 else args.num_channels
+        if args.value_layers <= 1:
+            value_layers.append(nn.Linear(current_dim, 1))
+        else:
+            for _ in range(args.value_layers - 1):
+                value_layers.extend(
+                    [
+                        nn.Linear(current_dim, args.value_dim),
+                        self.get_activation(),
+                        nn.Dropout(args.dropout),
+                    ]
+                )
+                current_dim = args.value_dim
+            value_layers.append(nn.Linear(current_dim, 1))
+        self.value_head = nn.Sequential(*value_layers)
+
+        # Initialize weights
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            if self.args.init_type == "kaiming":
+                nn.init.kaiming_normal_(
+                    module.weight, mode="fan_out", nonlinearity=self.args.activation
+                )
+            elif self.args.init_type == "xavier":
+                nn.init.xavier_normal_(module.weight)
+            elif self.args.init_type == "orthogonal":
+                nn.init.orthogonal_(module.weight)
+
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+
+            # Apply initialization scale
+            module.weight.data *= self.args.init_scale
+
+    def get_activation(self):
+        if self.args.activation == "relu":
+            return nn.ReLU()
+        elif self.args.activation == "gelu":
+            return nn.GELU()
+        elif self.args.activation == "elu":
+            return nn.ELU()
+        else:
+            return nn.ReLU()  # default
+
+    def graph_conv(self, node_features, adjacency_matrix, linear_layer, layer_idx):
+        """Enhanced graph convolution with edge features and normalization"""
+        # Degree-based normalization
         degrees = adjacency_matrix.sum(dim=-1, keepdim=True) + 1e-6
         norm_adj = adjacency_matrix / degrees
+
+        # Edge features if enabled
+        if self.use_edge_features:
+            # Create edge features (could be distances or other metrics)
+            edge_features = self.edge_embedding(adjacency_matrix.unsqueeze(-1).float())
+            edge_weights = self.edge_proj(edge_features)
+            # Combine with adjacency (handle broadcasting properly)
+            norm_adj = norm_adj.unsqueeze(-1) * edge_weights
+            # Sum over edge feature dimension
+            norm_adj = norm_adj.sum(dim=-1)
+
+        # Message passing
         agg_features = torch.bmm(norm_adj, node_features)
         out = linear_layer(agg_features)
+
+        # Apply normalizations (handle shapes carefully)
+        if self.use_batch_norm:
+            shape = out.shape
+            out = out.view(-1, shape[-1])
+            out = self.batch_norms[layer_idx](out)
+            out = out.view(*shape)
+
+        if self.args.layer_norm:
+            out = self.layer_norms[layer_idx](out)
+
         return out
+
+    def forward(self, node_features, adjacency_matrix):
+        # Initial embedding
+        x = self.embedding(node_features)
+
+        # Store initial features for skip connection
+        initial_features = x
+        if self.use_skip and hasattr(self, "skip_proj"):
+            initial_features = self.skip_proj(initial_features)
+
+        # Graph convolution layers
+        for i, conv_layer in enumerate(self.conv_layers):
+            # Apply graph convolution
+            out = self.graph_conv(x, adjacency_matrix, conv_layer, i)
+
+            # Skip connection if enabled
+            if self.use_skip:
+                out = out + initial_features
+
+            # Activation
+            out = self.get_activation()(out)
+
+            # Dropout
+            out = F.dropout(out, p=self.args.dropout, training=self.training)
+
+            x = out
+
+        # Global pooling
+        if self.global_pool == "mean":
+            pooled = torch.mean(x, dim=1)
+        elif self.global_pool == "sum":
+            pooled = torch.sum(x, dim=1)
+        else:  # max
+            pooled = torch.max(x, dim=1)[0]
+
+        # Readout MLP
+        features = self.readout(pooled)
+
+        # Policy and value heads
+        pi = self.policy_head(features)
+        v = self.value_head(features)
+
+        return pi, v.squeeze(-1)

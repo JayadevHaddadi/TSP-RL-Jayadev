@@ -103,59 +103,149 @@ def main():
     # Direct assignment of configuration values to base_args
     base_args = dotdict(
         {
+            #####################################
+            # Basic Configuration
+            #####################################
             "base_folder": ".",
-            # TSP instance parameters
-            "tsp_instance": "tsplib/burma14.tsp",  # Set to None for random TSP
-            "num_nodes": 20,  # Only used if tsp_instance is None
-            # Neural network parameters
-            "architecture": "gcn",  # Choose: "gcn", "pointer", or "transformer"
-            "dropout": 0.5,
-            "lr": 0.001,
-            "num_channels": 512,
-            "max_gradient_norm": 5.0,
-            # Training parameters
-            "numIters": 1000,
-            "numEps": 40,
-            "epochs": 5,
-            "batch_size": 64,
+            # TSP Instance Settings
+            "tsp_instance": "tsplib/burma14.tsp",  # None,  # Set to path like "tsplib/burma14.tsp" or None for random
+            "num_nodes": 5,  # Only used if tsp_instance is None
+            #####################################
+            # Neural Network Architecture
+            #####################################
+            # Core Architecture
+            "architecture": "gcn",  # Options: "gcn", "pointer", "transformer"
+            "num_channels": 512,  # Width of network (64-1024). Larger = more expressive but slower
+            "num_layers": 8,  # Number of GCN layers (2-16). Deeper = larger receptive field
+            "embedding_dim": 128,  # Initial node embedding size (32-256)
+            "hidden_dim": 256,  # Hidden layer width (64-512)
+            # Attention & Regularization
+            "heads": 8,  # Number of attention heads (4-16). More heads = finer-grained attention
+            "dropout": 0.1,  # Dropout rate (0.0-0.5). Higher = more regularization
+            "activation": "relu",  # Activation function: 'relu', 'gelu', 'elu'
+            # Architecture Components
+            "layer_norm": True,  # Whether to use layer normalization
+            "skip_connections": True,  # Whether to use residual connections
+            "pooling": "mean",  # Graph pooling: 'mean', 'sum', 'max'
+            "feature_norm": "batch",  # Feature normalization: 'batch', 'layer', 'none'
+            #####################################
+            # Training Parameters
+            #####################################
+            # Optimization
+            "learning_rate": 0.001,  # Initial learning rate (1e-4 to 1e-2)
+            "lr_decay": 0.95,  # Learning rate decay factor (0.9-0.99)
+            "weight_decay": 1e-4,  # L2 regularization (1e-5 to 1e-3)
+            "grad_clip": 5.0,  # Gradient clipping threshold
+            "batch_norm": True,  # Use batch normalization
+            "max_gradient_norm": 5.0,  # Maximum gradient norm for clipping
+            # Training Loop
+            "numIters": 1000,  # Number of training iterations
+            "numEps": 40,  # Episodes per iteration
+            "epochs": 5,  # Training epochs per iteration
+            "batch_size": 64,  # Batch size for training
+            #####################################
+            # Policy & Value Networks
+            #####################################
+            # Policy Head
+            "policy_layers": 2,  # Number of layers in policy head (1-3)
+            "policy_dim": 256,  # Policy head hidden dimension (64-512)
+            # Value Head
+            "value_layers": 2,  # Number of layers in value head (1-3)
+            "value_dim": 256,  # Value head hidden dimension (64-512)
+            #####################################
+            # Advanced Architecture Options
+            #####################################
+            # Edge Features
+            "use_edge_features": True,  # Whether to use edge features
+            "edge_dim": 64,  # Edge feature dimension (16-128)
+            # Global Information
+            "global_pool": "mean",  # Global pooling method: 'mean', 'sum', 'max'
+            "readout_layers": 2,  # Number of layers in readout MLP
+            "readout_dim": 256,  # Readout hidden dimension
+            # Initialization
+            "init_type": "kaiming",  # Weight initialization: 'kaiming', 'xavier', 'orthogonal'
+            "init_scale": 1.0,  # Scale factor for initialization
+            #####################################
+            # MCTS & Evaluation Parameters
+            #####################################
+            "numMCTSSims": 100,  # Number of MCTS simulations during training
+            "numMCTSSimsEval": 100,  # Number of MCTS simulations during evaluation
+            "maxlenOfQueue": 200000,  # Maximum length of the queue
+            "cpuct": 1.0,  # Exploration constant in MCTS
+            # Training History
             "numItersForTrainExamplesHistory": 20,
-            "augmentationFactor": 1,
-            # MCTS parameters
-            "numMCTSSims": 100,
-            "numMCTSSimsEval": 100,
-            "maxlenOfQueue": 200000,
-            "cpuct": 1.0,
-            # Evaluation parameters
+            "augmentationFactor": 1,  # Data augmentation factor
+            # Evaluation
             "coordinatesToEvaluate": 5,
             "plot_all_eval_sets_interval": 10,
-            # Other parameters
+            # System
             "cuda": torch.cuda.is_available(),
             "visualize": True,
             "read_from_file": False,
-            "load_model": False,  # Set this to True if you want to load a model
+            "load_model": False,  # Set True to load a pre-trained model
         }
     )
 
-    # Different architectures to compare
+    # Preset configurations for different scenarios
+    preset_configs = {
+        "light": {  # Fast training, smaller network
+            "num_channels": 128,
+            "num_layers": 4,
+            "embedding_dim": 64,
+            "hidden_dim": 128,
+            "heads": 4,
+            "dropout": 0.1,
+            "policy_layers": 1,
+            "value_layers": 1,
+            "edge_dim": 32,
+            "readout_dim": 128,
+        },
+        "medium": {  # Balanced performance/speed
+            "num_channels": 256,
+            "num_layers": 8,
+            "embedding_dim": 128,
+            "hidden_dim": 256,
+            "heads": 8,
+            "dropout": 0.1,
+            "policy_layers": 2,
+            "value_layers": 2,
+            "edge_dim": 64,
+            "readout_dim": 256,
+        },
+        "heavy": {  # Best performance, slower training
+            "num_channels": 512,
+            "num_layers": 12,
+            "embedding_dim": 256,
+            "hidden_dim": 512,
+            "heads": 16,
+            "dropout": 0.2,
+            "policy_layers": 3,
+            "value_layers": 3,
+            "edge_dim": 128,
+            "readout_dim": 512,
+        },
+    }
+
+    # Example of using a preset configuration:
     arch_list = [
         (
-            "burma14 normal",  # Name of the experiment
+            "burma14_light",  # Name of the experiment
             {
-                # Override any parameters from base_args here
+                **preset_configs["light"],  # Use light configuration
                 "numMCTSSims": 25,
                 "numMCTSSimsEval": 25,
                 "numEps": 5,
-                "tsp_instance": "tsplib/burma14.tsp",
             },
         ),
-        # Add more configurations here if needed
-        # (
-        #     "eil51 large",
-        #     {
-        #         "tsp_instance": "tsplib/eil51.tsp",
-        #         "num_channels": 512,
-        #     },
-        # ),
+        (
+            "burma14_heavy",  # Name of the experiment
+            {
+                **preset_configs["heavy"],  # Use heavy configuration
+                "numMCTSSims": 100,
+                "numMCTSSimsEval": 100,
+                "numEps": 10,
+            },
+        ),
     ]
 
     # Generate ONE shared set of evaluation TSPs for consistent comparison

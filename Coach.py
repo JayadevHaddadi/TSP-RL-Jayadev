@@ -42,6 +42,7 @@ class Coach:
 
         # Possibly known best from TSPLIB
         self.best_tour_length = best_tour_length
+        print(f"Best tour length: {self.best_tour_length}")
 
         # For stable evaluation
         self.coords_for_eval = coords_for_eval or []
@@ -503,12 +504,54 @@ class Coach:
 
         # Left: stable eval length over iterations
         axL.plot(
-            iters, self.eval_avg_length_history, label="Eval Avg Length", color="green"
+            iters,
+            self.eval_avg_length_history,
+            label="Current Length",
+            color="blue",
+            linewidth=2,
         )
+
+        # Add horizontal line for the optimal solution length if available
+        if self.best_tour_length is not None:
+            axL.axhline(
+                y=self.best_tour_length,
+                color="red",
+                linestyle="--",
+                linewidth=2,
+                label=f"Optimal Solution ({self.best_tour_length:.1f})",
+                zorder=5,  # Make sure optimal line is on top
+            )
+
+            # Set y-axis limits to ensure optimal line is visible
+            if self.eval_avg_length_history:
+                # Get the full range of values we need to show
+                all_values = self.eval_avg_length_history + [self.best_tour_length]
+                max_length = max(all_values)
+                min_length = min(all_values)
+
+                # Calculate range and add padding
+                value_range = max_length - min_length
+                padding = value_range * 0.2  # 20% padding
+
+                # Ensure minimum padding of 10% of optimal length
+                min_padding = self.best_tour_length * 0.1
+                padding = max(padding, min_padding)
+
+                y_min = min_length - padding
+                y_max = max_length + padding
+            else:
+                # If no data points yet, center around optimal with generous padding
+                padding = self.best_tour_length * 0.5  # 50% padding when no data
+                y_min = self.best_tour_length - padding
+                y_max = self.best_tour_length + padding
+
+            axL.set_ylim(y_min, y_max)
+
         axL.set_xlabel("Iteration")
-        axL.set_ylabel("Final Tour Length")
-        axL.set_title("Eval Tour Length (Stable) Over Iterations")
-        axL.legend()
+        axL.set_ylabel("Tour Length")
+        axL.set_title("Tour Length Evolution")
+        axL.grid(True, alpha=0.3)
+        axL.legend(loc="upper right")
 
         # Right: policy + value loss
         ax1 = axR
@@ -530,20 +573,26 @@ class Coach:
 
         # If we have enough data, skip the first 5 from the range
         if len(self.iteration_v_loss_history) > 5:
-            # e.g. find the min of Value Loss after the first 5
             tail_vals = self.iteration_v_loss_history[5:]
             min_tail = min(tail_vals)
             max_tail = max(tail_vals)
-            ax2.set_ylim(min_tail * 0.8, max_tail * 1.2)  # some margin
+            ax2.set_ylim(min_tail * 0.8, max_tail * 1.2)
 
         ax2.legend(loc="upper right")
 
-        fig.suptitle(f"Iter {iteration}: EvalLen={eval_len:.4f}", fontsize=14)
+        # Add current performance to title
+        if self.best_tour_length is not None:
+            gap = ((eval_len - self.best_tour_length) / self.best_tour_length) * 100
+            title = f"Iter {iteration}: Length={eval_len:.1f} (Gap: {gap:.1f}%)"
+        else:
+            title = f"Iter {iteration}: Length={eval_len:.1f}"
+
+        fig.suptitle(title, fontsize=14)
         fig.tight_layout()
 
-        # Save in main folder
+        # Save in main folder with higher DPI for better quality
         loss_plot_path = os.path.join(self.folder, f"loss_and_length_history.png")
-        fig.savefig(loss_plot_path)
+        fig.savefig(loss_plot_path, dpi=300, bbox_inches="tight")
         plt.close(fig)
 
     ###############################################################################

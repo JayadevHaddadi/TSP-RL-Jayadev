@@ -69,6 +69,25 @@ def run_experiment(args, run_folder, coords_for_eval, nn_lengths_for_eval):
         logging.info(f"Loading model from: {args.load_folder_file}")
         nnet.load_checkpoint(args.load_folder_file[0], args.load_folder_file[1])
 
+    # Fetch best known tour length from solutions file if available
+    instance_name = args["tsp_instance"] if "tsp_instance" in args else None
+    if "solutions_file" in args:
+        solutions_file = args["solutions_file"]
+    elif instance_name:
+        solutions_file = os.path.join(os.path.dirname(instance_name), "solutions")
+    else:
+        solutions_file = "solutions"
+    print(f"Solutions file: {solutions_file}")
+    print(f"Instance name: {instance_name}")
+
+    best_tour_length = None
+    if instance_name:
+        solutions = read_solutions(solutions_file)
+        instance_key = os.path.splitext(os.path.basename(instance_name))[0]
+        print(f"Solutions: {solutions}")
+        best_tour_length = solutions.get(instance_key, None)
+        print(f"Best tour length for instance {instance_key}: {best_tour_length}")
+
     # Create the coach
     coach = Coach(
         game=game,
@@ -237,15 +256,15 @@ def main():
                 "numEps": 5,
             },
         ),
-        (
-            "burma14_heavy",  # Name of the experiment
-            {
-                **preset_configs["heavy"],  # Use heavy configuration
-                "numMCTSSims": 100,
-                "numMCTSSimsEval": 100,
-                "numEps": 10,
-            },
-        ),
+        # (
+        #     "burma14_heavy",  # Name of the experiment
+        #     {
+        #         **preset_configs["heavy"],  # Use heavy configuration
+        #         "numMCTSSims": 100,
+        #         "numMCTSSimsEval": 100,
+        #         "numEps": 10,
+        #     },
+        # ),
     ]
 
     # Generate ONE shared set of evaluation TSPs for consistent comparison

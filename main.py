@@ -42,7 +42,8 @@ def run_experiment(args, run_folder, coords_for_eval, nn_lengths_for_eval):
     if args.tsp_instance:
         # Load specific TSP instance
         logging.info(f"Loading TSP instance from: {args.tsp_instance}")
-        init_coords, best_tour_length = load_tsp_instance(args.tsp_instance)
+        tsp_instance = os.path.join(args.base_folder, args.tsp_instance)
+        init_coords, best_tour_length = load_tsp_instance(tsp_instance)
         num_nodes = len(init_coords)
 
         # Create game with explicit node_type
@@ -71,12 +72,10 @@ def run_experiment(args, run_folder, coords_for_eval, nn_lengths_for_eval):
 
     # Fetch best known tour length from solutions file if available
     instance_name = args["tsp_instance"] if "tsp_instance" in args else None
-    if "solutions_file" in args:
-        solutions_file = args["solutions_file"]
-    elif instance_name:
-        solutions_file = os.path.join(os.path.dirname(instance_name), "solutions")
-    else:
-        solutions_file = "solutions"
+    solutions_file = os.path.join(os.path.dirname(instance_name), "solutions")
+    solutions_file = os.path.join(args.base_folder, solutions_file)
+    print(f"Current working directory: {os.path.abspath(os.getcwd())}")
+    print(f"Script directory: {os.path.dirname(os.path.abspath(__file__))}")
     print(f"Solutions file: {solutions_file}")
     print(f"Instance name: {instance_name}")
 
@@ -84,7 +83,7 @@ def run_experiment(args, run_folder, coords_for_eval, nn_lengths_for_eval):
     if instance_name:
         solutions = read_solutions(solutions_file)
         instance_key = os.path.splitext(os.path.basename(instance_name))[0]
-        print(f"Solutions: {solutions}")
+        # print(f"Solutions: {solutions}")
         best_tour_length = solutions.get(instance_key, None)
         print(f"Best tour length for instance {instance_key}: {best_tour_length}")
 
@@ -125,7 +124,7 @@ def main():
             #####################################
             # Basic Configuration
             #####################################
-            "base_folder": ".",
+            "base_folder": ".", # "/home/swaminathanj/jayadev_tsp/alpha_tsp/" or "."
             # TSP Instance Settings
             "tsp_instance": "tsplib/burma14.tsp",  # None,  # Set to path like "tsplib/burma14.tsp" or None for random
             "num_nodes": 5,  # Only used if tsp_instance is None
@@ -256,15 +255,15 @@ def main():
                 "numEps": 5,
             },
         ),
-        # (
-        #     "burma14_heavy",  # Name of the experiment
-        #     {
-        #         **preset_configs["heavy"],  # Use heavy configuration
-        #         "numMCTSSims": 100,
-        #         "numMCTSSimsEval": 100,
-        #         "numEps": 10,
-        #     },
-        # ),
+        (
+            "burma14_heavy",  # Name of the experiment
+            {
+                **preset_configs["heavy"],  # Use heavy configuration
+                "numMCTSSims": 100,
+                "numMCTSSimsEval": 100,
+                "numEps": 10,
+            },
+        ),
     ]
 
     # Generate ONE shared set of evaluation TSPs for consistent comparison

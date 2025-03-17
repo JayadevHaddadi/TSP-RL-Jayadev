@@ -2,10 +2,10 @@ import os
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
-from TSP.pytorch.NNetWrapper import NNetWrapper
+import NNetWrapper
 from MCTS import MCTS
 import logging
-from TSP.TSPGame import TSPGame
+from TSPGame import TSPGame
 from utils import *
 
 

@@ -7,8 +7,8 @@ import torch
 import numpy as np
 import glob
 
-from TSP.TSPGame import TSPGame
-from TSP.pytorch.NNetWrapper import NNetWrapper
+from TSPGame import TSPGame
+from NNetWrapper import NNetWrapper
 from Coach import Coach
 from utils import *
 
@@ -266,7 +266,7 @@ def main():
             },
         ),
         (
-            "burma14_pointer_light",  # Name of the experiment
+            "burma14_transformer_deepseek_light",  # Name of the experiment
             {
                 "architecture": "transformer_deepseek",
                 **preset_configs["light"],  # Use light configuration

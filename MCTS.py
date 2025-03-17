@@ -1,9 +1,9 @@
 import logging
 import math
 import numpy as np
-from TSP import TSPState
-from TSP.TSPGame import TSPGame
-from TSP.pytorch.NNetWrapper import NNetWrapper
+import TSPState
+import TSPGame
+import NNetWrapper
 
 EPS = 1e-8
 log = logging.getLogger(__name__)

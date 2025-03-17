@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import random
 
 sys.path.append("..")
-from .TSPState import TSPState
+from TSPState import TSPState
 
 import logging
 

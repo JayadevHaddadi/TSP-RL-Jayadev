@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 
 sys.path.append("../../")
-from TSP.TSPGame import TSPGame
+from TSPGame import TSPGame
 from utils import *
 from NeuralNet import NeuralNet
 
@@ -24,19 +24,19 @@ class NNetWrapper(NeuralNet):
     def __init__(self, game: TSPGame, args):  # args is now a dictionary
         # Change all args.architecture to args['architecture']
         if args.get("architecture", "default") == "pointer":
-            from .TSPNNet_Pointer import TSPNNet_Pointer
+            from TSPNNet_Pointer import TSPNNet_Pointer
 
             self.nnet = TSPNNet_Pointer(game, args)
         elif args.get("architecture") == "transformer_deepseek":
-            from .TSPNNet_Transformer_deepseek import TransformerModel
+            from TSPNNet_Transformer_deepseek import TransformerModel
 
             self.nnet = TransformerModel(game, args)  # Fixed class name
         elif args.get("architecture") == "gcn":
-            from .TSPNNet_GCN import TSPNNet
+            from TSPNNet_GCN import TSPNNet
 
             self.nnet = TSPNNet(game, args)
         elif args.get("architecture") == "conformer":
-            from .ConformerNNet import ConformerNNet
+            from ConformerNNet import ConformerNNet
 
             self.nnet = ConformerNNet(game, args)
         else:

@@ -1,18 +1,16 @@
 import logging
 import os
-import random
 import csv
 from pickle import Pickler, Unpickler
 from random import shuffle
 
 import numpy as np
 from tqdm import tqdm
-import matplotlib
 import matplotlib.pyplot as plt
 
 from MCTS import MCTS
-from TSP.pytorch.NNetWrapper import NNetWrapper
-from TSP.TSPGame import TSPGame
+import NNetWrapper
+from TSPGame import TSPGame
 from utils import *
 
 log = logging.getLogger(__name__)
@@ -308,7 +306,7 @@ class Coach:
                 new_lbl = perm[old_lbl]
                 new_unvisited[new_lbl] = 1
 
-        from TSP.TSPState import TSPState
+        from TSPState import TSPState
 
         new_state = TSPState(n, new_coords)
         new_state.tour = new_tour
@@ -354,7 +352,7 @@ class Coach:
             ry += 0.5
             rotated_coords.append([rx, ry])
 
-        from TSP.TSPState import TSPState
+        from TSPState import TSPState
 
         new_state = TSPState(state.num_nodes, rotated_coords)
         new_state.tour = list(state.tour)

@@ -124,7 +124,7 @@ def main():
             #####################################
             # Basic Configuration
             #####################################
-            "base_folder": ".", # "/home/swaminathanj/jayadev_tsp/alpha_tsp/" or "."
+            "base_folder": ".",  # "/home/swaminathanj/jayadev_tsp/alpha_tsp/" or "."
             # TSP Instance Settings
             "tsp_instance": "tsplib/burma14.tsp",  # None,  # Set to path like "tsplib/burma14.tsp" or None for random
             "num_nodes": 5,  # Only used if tsp_instance is None
@@ -132,7 +132,7 @@ def main():
             # Neural Network Architecture
             #####################################
             # Core Architecture
-            "architecture": "gcn",  # Options: "gcn", "pointer", "transformer"
+            "architecture": "gcn",  # Options: "gcn", "pointer", "transformer", "conformer"
             "num_channels": 512,  # Width of network (64-1024). Larger = more expressive but slower
             "num_layers": 8,  # Number of GCN layers (2-16). Deeper = larger receptive field
             "embedding_dim": 128,  # Initial node embedding size (32-256)
@@ -256,14 +256,54 @@ def main():
             },
         ),
         (
-            "burma14_heavy",  # Name of the experiment
+            "burma14_pointer_light",  # Name of the experiment
             {
-                **preset_configs["heavy"],  # Use heavy configuration
-                "numMCTSSims": 100,
-                "numMCTSSimsEval": 100,
-                "numEps": 10,
+                "architecture": "pointer",
+                **preset_configs["light"],  # Use light configuration
+                "numMCTSSims": 25,
+                "numMCTSSimsEval": 25,
+                "numEps": 5,
             },
         ),
+        (
+            "burma14_pointer_light",  # Name of the experiment
+            {
+                "architecture": "transformer_deepseek",
+                **preset_configs["light"],  # Use light configuration
+                "numMCTSSims": 25,
+                "numMCTSSimsEval": 25,
+                "numEps": 5,
+            },
+        ),
+        # (
+        #     "burma14_heavy",  # Name of the experiment
+        #     {
+        #         **preset_configs["heavy"],  # Use heavy configuration
+        #         "numMCTSSims": 100,
+        #         "numMCTSSimsEval": 100,
+        #         "numEps": 10,
+        #     },
+        # ),
+        # (
+        #     "burma14_conformer",  # Conformer based experiment
+        #     {
+        #         "architecture": "conformer",
+        #         **preset_configs["light"],
+        #         "numMCTSSims": 25,
+        #         "numMCTSSimsEval": 25,
+        #         "numEps": 5,
+        #     },
+        # ),
+        # (
+        #     "burma14_conformer",  # Conformer based experiment
+        #     {
+        #         "architecture": "conformer",
+        #         **preset_configs["medium"],
+        #         "numMCTSSims": 50,
+        #         "numMCTSSimsEval": 50,
+        #         "numEps": 7,
+        #     },
+        # ),
     ]
 
     # Generate ONE shared set of evaluation TSPs for consistent comparison

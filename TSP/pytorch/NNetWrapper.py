@@ -26,7 +26,7 @@ class NNetWrapper(NeuralNet):
         if args.get("architecture", "default") == "pointer":
             from .TSPNNet_Pointer import TSPNNet_Pointer
 
-            self.nnet = TSPNNet(game, args)
+            self.nnet = TSPNNet_Pointer(game, args)
         elif args.get("architecture") == "transformer_deepseek":
             from .TSPNNet_Transformer_deepseek import TransformerModel
 
@@ -35,6 +35,10 @@ class NNetWrapper(NeuralNet):
             from .TSPNNet_GCN import TSPNNet
 
             self.nnet = TSPNNet(game, args)
+        elif args.get("architecture") == "conformer":
+            from .ConformerNNet import ConformerNNet
+
+            self.nnet = ConformerNNet(game, args)
         else:
             raise Exception("No known NN architecture")
 
@@ -42,7 +46,7 @@ class NNetWrapper(NeuralNet):
         self.args = args
         self.board_size = game.getNumberOfNodes()
         self.action_size = game.getActionSize()
-        self.node_coordinates = np.array(game.node_coordinates)
+        self.node_coordinates = np.array(game.node_coordinates)[: self.board_size]
         coords_min = self.node_coordinates.min(axis=0)
         coords_max = self.node_coordinates.max(axis=0)
         self.normalized_coords = (self.node_coordinates - coords_min) / (
@@ -62,6 +66,14 @@ class NNetWrapper(NeuralNet):
         self.print_model_info()
 
     def prepare_input(self, state):
+        if self.args.get("architecture") == "conformer":
+            # For conformer, ignore state-specific info and use raw 2D coordinates
+            nf = self.normalized_coords.unsqueeze(0)  # shape: (1, num_nodes, 2)
+            dummy_adj = torch.zeros(
+                (1, self.board_size, self.board_size),
+                device=self.normalized_coords.device,
+            )
+            return nf, dummy_adj
         num_nodes = self.board_size
         normalized_coords = self.normalized_coords  # Use precomputed tensor
 

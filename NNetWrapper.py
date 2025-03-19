@@ -36,7 +36,7 @@ class NNetWrapper(NeuralNet):
 
             self.nnet = TSPNNet(game, args)
         elif args.get("architecture") == "conformer":
-            from ConformerNNet import ConformerNNet
+            from TSPNNet_Conformer import ConformerNNet
 
             self.nnet = ConformerNNet(game, args)
         else:

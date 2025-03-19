@@ -2,44 +2,69 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class TransformerModel(nn.Module):
     def __init__(self, game, args):
-        super().__init__()
+        super(TransformerModel, self).__init__()
         self.args = args
-        self.node_feature_size = 4
-        self.hidden_dim = 128
-        self.nhead = 4
-        self.num_layers = 3
+        self.embedding_dim = args.embedding_dim
+        self.hidden_dim = args.hidden_dim  # Used as dim for feedforward
+        self.num_layers = args.num_layers
+        self.heads = args.heads
+        self.dropout = args.dropout
+        self.policy_layers = args.policy_layers
+        self.policy_dim = args.policy_dim
+        self.value_layers = args.value_layers
+        self.value_dim = args.value_dim
 
-        # Embedding
-        self.embedding = nn.Linear(self.node_feature_size, self.hidden_dim)
-        
-        # Transformer
+        # Input layer: embed 2D coordinates into an embedding space
+        self.input_layer = nn.Linear(4, self.embedding_dim)
+
+        # Transformer encoder layer and encoder
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=self.hidden_dim,
-            nhead=self.nhead,
-            dim_feedforward=512,
-            dropout=args.dropout
+            d_model=self.embedding_dim,
+            nhead=self.heads,
+            dropout=self.dropout,
+            dim_feedforward=self.hidden_dim,
         )
-        self.transformer = nn.TransformerEncoder(encoder_layer, self.num_layers)
-        
-        # Heads
-        self.fc_pi = nn.Linear(self.hidden_dim, game.getActionSize())
-        self.fc_v = nn.Linear(self.hidden_dim, 1)
+        self.transformer_encoder = nn.TransformerEncoder(
+            encoder_layer, num_layers=self.num_layers
+        )
+
+        # Policy head: build an MLP with policy_layers and policy_dim
+        policy_modules = []
+        input_size = self.embedding_dim
+        for i in range(self.policy_layers - 1):
+            policy_modules.append(nn.Linear(input_size, self.policy_dim))
+            policy_modules.append(nn.ReLU())
+            input_size = self.policy_dim
+        policy_modules.append(nn.Linear(input_size, 1))
+        self.policy_head = nn.Sequential(*policy_modules)
+
+        # Value head: build an MLP with value_layers and value_dim
+        value_modules = []
+        input_size = self.embedding_dim
+        for i in range(self.value_layers - 1):
+            value_modules.append(nn.Linear(input_size, self.value_dim))
+            value_modules.append(nn.ReLU())
+            input_size = self.value_dim
+        value_modules.append(nn.Linear(input_size, 1))
+        value_modules.append(nn.Tanh())
+        self.value_head = nn.Sequential(*value_modules)
 
     def forward(self, node_features, adjacency):
-        # Embed and add positional encoding
-        x = self.embedding(node_features)  # [B,N,feat]
-        x = x.permute(1, 0, 2)  # [N,B,feat] for transformer
-        
-        # Transformer
-        x = self.transformer(x)
-        x = x.permute(1, 0, 2)  # [B,N,feat]
-        
-        # Pooling
-        x = x.mean(dim=1)  # Global average pooling
-        
-        # Outputs
-        pi = F.softmax(self.fc_pi(x), dim=1)
-        v = self.fc_v(x)
-        return pi, v
+        # node_features shape: (batch, num_nodes, 2)
+        x = self.input_layer(node_features)  # (batch, num_nodes, embedding_dim)
+
+        # Rearrangement for transformer encoder: (num_nodes, batch, embedding_dim)
+        x = x.transpose(0, 1)
+        x = self.transformer_encoder(x)
+        x = x.transpose(0, 1)  # back to (batch, num_nodes, embedding_dim)
+
+        # Policy head: compute per-node scores
+        policy_logits = self.policy_head(x).squeeze(-1)  # (batch, num_nodes)
+
+        # Value head: aggregate node embeddings and compute state value
+        value = self.value_head(x.mean(dim=1)).squeeze(-1)  # (batch,)
+
+        return policy_logits, value

@@ -158,8 +158,8 @@ def main():
             "max_gradient_norm": 5.0,  # Maximum gradient norm for clipping
             # Training Loop
             "numIters": 1000,  # Number of training iterations
-            "numEps": 40,  # Episodes per iteration
-            "epochs": 5,  # Training epochs per iteration
+            "numEps": 100,  # Episodes per iteration
+            "epochs": 10,  # Training epochs per iteration
             "batch_size": 64,  # Batch size for training
             #####################################
             # Policy & Value Networks
@@ -246,33 +246,33 @@ def main():
 
     # Example of using a preset configuration:
     arch_list = [
-        (
-            "burma14_light",  # Name of the experiment
-            {
-                **preset_configs["light"],  # Use light configuration
-                "numMCTSSims": 25,
-                "numMCTSSimsEval": 25,
-                "numEps": 5,
-            },
-        ),
-        (
-            "burma14_pointer_light",  # Name of the experiment
-            {
-                "architecture": "pointer",
-                **preset_configs["light"],  # Use light configuration
-                "numMCTSSims": 25,
-                "numMCTSSimsEval": 25,
-                "numEps": 5,
-            },
-        ),
+        # (
+        #     "burma14_light",  # Name of the experiment
+        #     {
+        #         **preset_configs["light"],  # Use light configuration
+        #         "numMCTSSims": 25,
+        #         "numMCTSSimsEval": 25,
+        #         "numEps": 5,
+        #     },
+        # ),
+        # (
+        #     "burma14_pointer_light",  # Name of the experiment
+        #     {
+        #         "architecture": "pointer",
+        #         **preset_configs["medium"],
+        #         "numMCTSSims": 50,
+        #         "numMCTSSimsEval": 50,
+        #         "numEps": 7,
+        #     },
+        # ),
         (
             "burma14_transformer_deepseek_light",  # Name of the experiment
             {
                 "architecture": "transformer_deepseek",
-                **preset_configs["light"],  # Use light configuration
-                "numMCTSSims": 25,
-                "numMCTSSimsEval": 25,
-                "numEps": 5,
+                **preset_configs["medium"],
+                "numMCTSSims": 50,
+                "numMCTSSimsEval": 50,
+                "numEps": 7,
             },
         ),
         # (

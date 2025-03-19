@@ -252,7 +252,7 @@ class Coach:
             # Plot overall losses & single-line average
             self.plot_loss_and_length_history(i, avg_len)
             # Also plot the multi-subplot figure for each evaluation set
-            self.plotMultiEvalSubplots(i)
+            # self.plotMultiEvalSubplots(i)
 
     def augmentExamples(self, original_data):
         """

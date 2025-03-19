@@ -2,9 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class TSPNNet_Pointer(nn.Module):
     """
-    Minimal pointer-like net: 
+    Minimal pointer-like net:
     - We'll embed each node (with x,y plus partial-tour position).
     - Then we'll have a "decoder" query embedding to get a distribution over unvisited nodes.
     """
@@ -12,62 +13,42 @@ class TSPNNet_Pointer(nn.Module):
     def __init__(self, game, args):
         super(TSPNNet_Pointer, self).__init__()
         self.args = args
-        self.num_nodes = game.getNumberOfNodes()
-        self.action_size = game.getActionSize()
+        self.embedding_dim = args.embedding_dim
+        self.hidden_dim = args.hidden_dim
+        self.num_layers = args.num_layers
+        self.dropout = args.dropout
 
-        self.node_feature_size = 4
-        hidden_dim = getattr(args, "num_channels", 128)
+        # Input layer: embed 4D coordinates into an embedding space
+        self.input_layer = nn.Linear(4, self.embedding_dim)
 
-        # 1) Node embedding
-        self.embedding = nn.Linear(self.node_feature_size, hidden_dim)
+        # Encoder: LSTM with configurable layers and dropout (if more than one layer)
+        self.encoder = nn.LSTM(
+            input_size=self.embedding_dim,
+            hidden_size=self.hidden_dim,
+            num_layers=self.num_layers,
+            dropout=self.dropout if self.num_layers > 1 else 0,
+            batch_first=True,
+        )
 
-        # 2) "Decoder LSTM" or single query vector
-        self.decoder_rnn = nn.LSTMCell(hidden_dim, hidden_dim)
+        # Pointer: compute attention scores for each node from the encoder outputs
+        self.pointer = nn.Linear(self.hidden_dim, 1)
 
-        # Optionally, have a single "query" parameter
-        self.query = nn.Parameter(torch.randn(1, hidden_dim))
+        # Value head: a small MLP for state value estimation
+        self.value_head = nn.Sequential(
+            nn.Linear(self.hidden_dim, self.hidden_dim),
+            nn.ReLU(),
+            nn.Linear(self.hidden_dim, 1),
+        )
 
-        # 3) Attn projection
-        self.attn_W = nn.Linear(hidden_dim, hidden_dim, bias=False)
-        self.v = nn.Parameter(torch.randn(hidden_dim))  # for dot with tanh
+    def forward(self, node_features, adjacency):
+        # node_features shape: (batch, num_nodes, 4)
+        x = self.input_layer(node_features)  # (batch, num_nodes, embedding_dim)
+        encoder_outputs, _ = self.encoder(x)  # (batch, num_nodes, hidden_dim)
 
-        # 4) Value head
-        self.value_head = nn.Linear(hidden_dim, 1)
+        # Policy: for each node, get pointer logits
+        policy_logits = self.pointer(encoder_outputs).squeeze(-1)  # (batch, num_nodes)
 
-    def forward(self, node_features, adjacency_matrix):
-        """
-        node_features: [B, N, 3]
-        adjacency_matrix: [B, N, N] (not used strongly here).
-        We'll produce:
-          pi: [B, N] distribution
-          v:  [B, 1] leftover distance
-        """
-        B, N, _ = node_features.size()
+        # Value: average hidden states then pass through value head
+        value = self.value_head(encoder_outputs.mean(dim=1)).squeeze(-1)  # (batch,)
 
-        # 1) embed nodes
-        node_emb = self.embedding(node_features)  # [B, N, hidden_dim]
-        node_emb = F.relu(node_emb)
-
-        # 2) decode step
-        # We'll treat self.query as the decoder's hidden/cell init
-        query = self.query.expand(B, -1)  # [B, hidden_dim]
-        hx, cx = self.decoder_rnn(query)  # you might do hx,cx = self.decoder_rnn(query,h0)
-        # but for simplicity let's do no initial hidden => 0
-
-        # 3) attention 
-        #  atn_i = v^T tanh( W * node_emb + hx )
-        #  => shape [B,N]
-        Wemb = self.attn_W(node_emb)  # [B, N, hidden_dim]
-        hx_reshaped = hx.unsqueeze(1).expand(B, N, hx.size(-1))  # [B,N,hidden_dim]
-
-        sum_emb = torch.tanh(Wemb + hx_reshaped)  # [B,N,hidden_dim]
-        # dot with v
-        attn_logits = torch.einsum("bnh,h->bn", sum_emb, self.v)  # => [B,N]
-        # mask unvisited? We'll rely on MCTS for that, or we can softmax then multiply by valid moves
-
-        pi = F.softmax(attn_logits, dim=-1)  # [B,N]
-
-        # 4) leftover distance as value => use hx
-        v = self.value_head(hx)  # [B,1]
-
-        return pi, v
+        return policy_logits, value

@@ -186,7 +186,6 @@ def load_tsp_instance(filepath):
     Load a TSP instance from a TSPLIB file
     Returns coordinates and optionally the best known solution length
     """
-    import numpy as np
     import logging
 
     coords = []
@@ -238,54 +237,7 @@ def load_tsp_instance(filepath):
 
     return coords, best_tour_length
 
-
-def log_configuration(args):
-    """
-    Log all configuration parameters for reference.
-
-    Args:
-        args: Dictionary or dotdict containing configuration parameters
-    """
-    if not isinstance(args, dotdict):
-        args = dotdict(args)
-
-    logging.info("=" * 50)
-    logging.info("CONFIGURATION PARAMETERS:")
-    logging.info("=" * 50)
-
-    # TSP parameters
-    logging.info("TSP PARAMETERS:")
-    logging.info(f"  TSP Instance: {args.tsp_instance}")
-    logging.info(f"  Number of Nodes: {args.num_nodes}")
-
-    # Neural network parameters
-    logging.info("NEURAL NETWORK PARAMETERS:")
-    logging.info(f"  Architecture: {args.architecture}")
-    logging.info(f"  Dropout: {args.dropout}")
-    logging.info(f"  Learning Rate: {args.learning_rate}")
-    logging.info(f"  Number of Channels: {args.num_channels}")
-    logging.info(f"  Max Gradient Norm: {args.max_gradient_norm}")
-
-    # Training parameters
-    logging.info("TRAINING PARAMETERS:")
-    logging.info(f"  Number of Iterations: {args.numIters}")
-    logging.info(f"  Episodes per Iteration: {args.numEps}")
-    logging.info(f"  Epochs: {args.epochs}")
-    logging.info(f"  Batch Size: {args.batch_size}")
-    logging.info(f"  History Iterations: {args.numItersForTrainExamplesHistory}")
-    logging.info(f"  Augmentation Factor: {args.augmentationFactor}")
-
-    # MCTS parameters
-    logging.info("MCTS PARAMETERS:")
-    logging.info(f"  MCTS Simulations: {args.numMCTSSims}")
-    logging.info(f"  MCTS Eval Simulations: {args.numMCTSSimsEval}")
-    logging.info(f"  Max Queue Length: {args.maxlenOfQueue}")
-    logging.info(f"  CPUCT: {args.cpuct}")
-
-    # Other parameters
-    logging.info("OTHER PARAMETERS:")
-    logging.info(f"  CUDA: {args.cuda}")
-    logging.info(f"  Visualize: {args.visualize}")
-    logging.info(f"  Read from File: {args.read_from_file}")
-    logging.info(f"  Load Model: {args.load_model}")
-    logging.info("=" * 50)
+def log_configuration(config):
+    """Dynamically logs all configuration key-value pairs."""
+    for key, value in config.items():
+        logging.info(f"{key}: {value}")

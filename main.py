@@ -74,10 +74,10 @@ def run_experiment(args, run_folder, coords_for_eval, nn_lengths_for_eval):
     instance_name = args["tsp_instance"] if "tsp_instance" in args else None
     solutions_file = os.path.join(os.path.dirname(instance_name), "solutions")
     solutions_file = os.path.join(args.base_folder, solutions_file)
-    print(f"Current working directory: {os.path.abspath(os.getcwd())}")
-    print(f"Script directory: {os.path.dirname(os.path.abspath(__file__))}")
-    print(f"Solutions file: {solutions_file}")
-    print(f"Instance name: {instance_name}")
+    logging.info(f"Current working directory: {os.path.abspath(os.getcwd())}")
+    logging.info(f"Script directory: {os.path.dirname(os.path.abspath(__file__))}")
+    logging.info(f"Solutions file: {solutions_file}")
+    logging.info(f"Instance name: {instance_name}")
 
     best_tour_length = None
     if instance_name:

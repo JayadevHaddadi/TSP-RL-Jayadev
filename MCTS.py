@@ -4,6 +4,7 @@ import numpy as np
 import TSPState
 import TSPGame
 import NNetWrapper
+from tqdm import tqdm
 
 EPS = 1e-8
 log = logging.getLogger(__name__)
@@ -27,17 +28,26 @@ class MCTS:
         self.Ps = {}
         self.Es = {}
         self.Vs = {}
-        self.Pred_cache = {}  # New cache for predictions
+        self.Pred_cache = {}  # Cache for predictions
+
+        # Statistics for monitoring
+        self.cache_hits = 0
+        self.total_searches = 0
+        self.tree_depth = 0
 
     def getActionProb(self, state, temp=1):
-        uniqueStringe = self.game.uniqueStringRepresentation(state)
+        uniqueString = self.game.uniqueStringRepresentation(state)
+
+        # Run simulations to build the search tree
         for _ in range(self.args.numMCTSSims):
-            self.search(state, uniqueStringe)  # Pass the precomputed string
+            self.search(state, uniqueString)  # Pass the precomputed string
+            self.total_searches += 1
 
         counts = [
-            self.Nsa[(uniqueStringe, a)] if (uniqueStringe, a) in self.Nsa else 0
+            self.Nsa[(uniqueString, a)] if (uniqueString, a) in self.Nsa else 0
             for a in range(self.game.getActionSize())
         ]
+
         if temp == 0:
             bestAs = np.argwhere(counts == np.max(counts)).flatten()
             bestA = np.random.choice(bestAs)
@@ -47,6 +57,7 @@ class MCTS:
             counts_exp = [x ** (1.0 / temp) for x in counts]
             counts_sum = float(sum(counts_exp))
             probs = [x / counts_sum for x in counts_exp]
+
         return probs
 
     def search(self, tsp_state: TSPState, state_str=None):
@@ -69,7 +80,8 @@ class MCTS:
         if state_string not in self.Ps:
             # Leaf node
             if state_string in self.Pred_cache:
-                self.Ps[state_string], leftover_v = self.Pred_cache[s]
+                self.Ps[state_string], leftover_v = self.Pred_cache[state_string]
+                self.cache_hits += 1
             else:
                 self.Ps[state_string], leftover_v = self.nnet.predict(tsp_state)
                 self.Pred_cache[state_string] = (self.Ps[state_string], leftover_v)

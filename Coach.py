@@ -156,9 +156,12 @@ class Coach:
         Self-play with random coords if we are not reading from file => Overwrite the game coords.
         Then do MCTS from configured start node => leftover distance as target value.
         """
-        if not self.args.read_from_file:
+        if not self.args.tsp_instance:
             new_coords = np.random.rand(self.game.num_nodes, 2).tolist()
             self.game.node_coordinates = new_coords
+
+            # Reset distance matrix in game after changing coordinates
+            self.game.distance_matrix = self.game._compute_distance_matrix()
 
         # Modified start node selection
         if self.args.get("fixed_start", True):
@@ -169,9 +172,21 @@ class Coach:
         state = self.game.getInitState(start_node=start_node)
         trajectory = []
 
+        # Cache string representations to avoid recomputation
+        visited_states = set()
+
         while not self.game.isTerminal(state):
+            # Get string representation once per state
+            state_str = self.game.uniqueStringRepresentation(state)
+
+            # Track visited states for analysis
+            visited_states.add(state_str)
+
+            # Get action probabilities - reusing existing tree knowledge
             pi = self.mcts.getActionProb(state, temp=1)
             trajectory.append((state, pi))
+
+            # Choose action
             action = np.random.choice(len(pi), p=pi)
             state = self.game.getNextState(state, action)
 
@@ -181,6 +196,12 @@ class Coach:
             leftover = final_len - st.current_length
             examples.append((st, pi, leftover))
 
+        # Optionally log stats about this episode
+        if hasattr(self.mcts, "total_searches"):
+            logging.debug(
+                f"Episode unique states: {len(visited_states)}, MCTS searches: {self.mcts.total_searches}"
+            )
+
         return examples
 
     def learn(self):
@@ -188,12 +209,37 @@ class Coach:
             log.info(f"=== Starting Iter #{i} ===")
             iterationTrainExamples = []
 
+            # Create a single MCTS instance per iteration - will be reused across episodes
+            log.info(
+                "Creating MCTS instance for this iteration (will be reused across episodes)"
+            )
+            self.mcts = MCTS(self.game, self.nnet, self.args)
+            mcts_stats = {"total_nodes": 0, "cache_hits": 0}
+
             # Self-play
-            for _ in tqdm(range(self.args.numEps), desc="Self Play"):
-                self.mcts = MCTS(self.game, self.nnet, self.args)
+            for ep in tqdm(range(self.args.numEps), desc="Self Play"):
+                # We no longer create a new MCTS for each episode
+                # Track MCTS tree size before episode
+                pre_episode_nodes = len(self.mcts.Ns) if hasattr(self.mcts, "Ns") else 0
+
                 episode_data = (
                     self.executeEpisode()
                 )  # list of (state, pi, leftover_dist)
+
+                # Track MCTS tree growth
+                post_episode_nodes = (
+                    len(self.mcts.Ns) if hasattr(self.mcts, "Ns") else 0
+                )
+                nodes_added = post_episode_nodes - pre_episode_nodes
+                mcts_stats["total_nodes"] = post_episode_nodes
+
+                if hasattr(self.mcts, "cache_hits"):
+                    mcts_stats["cache_hits"] = self.mcts.cache_hits
+
+                if ep % 5 == 0:  # Log every 5 episodes
+                    log.info(
+                        f"Episode {ep}: MCTS tree size {post_episode_nodes} nodes (+{nodes_added} new)"
+                    )
 
                 # *** AUGMENT BEFORE ADDING TO iterationTrainExamples ***
                 if getattr(self.args, "augmentationFactor", 1) > 1:
@@ -201,6 +247,13 @@ class Coach:
                     iterationTrainExamples.extend(augmented_data)
                 else:
                     iterationTrainExamples.extend(episode_data)
+
+            # Log final MCTS statistics for this iteration
+            log.info(
+                f"Iteration {i} MCTS final size: {mcts_stats['total_nodes']} nodes"
+            )
+            if mcts_stats["cache_hits"] > 0:
+                log.info(f"MCTS cache hits: {mcts_stats['cache_hits']}")
 
             # Now add the iterationTrainExamples to trainExamplesHistory
             self.trainExamplesHistory.append(iterationTrainExamples)

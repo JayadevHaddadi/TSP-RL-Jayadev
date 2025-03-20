@@ -199,7 +199,6 @@ def main():
             # System
             "cuda": torch.cuda.is_available(),
             "visualize": True,
-            "read_from_file": False,
             "load_model": False,  # Set True to load a pre-trained model
             "fixed_start": True,  # Set to False for random starts
             "fixed_start_node": 0,  # Which node to use when fixed_start=True

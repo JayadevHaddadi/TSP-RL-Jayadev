@@ -106,9 +106,14 @@ class Coach:
         N = len(self.coords_for_eval)
 
         for idx, coords in enumerate(self.coords_for_eval):
-            # Evaluate from start_node=0
+            # Evaluate from configured start node
+            start_node = (
+                self.args.get("fixed_start_node", 0)
+                if self.args.get("fixed_start", True)
+                else np.random.choice(len(coords))
+            )
             self.game.node_coordinates = coords
-            state = self.game.getInitState()
+            state = self.game.getInitState(start_node=start_node)
             temp_mcts = MCTS(self.game, self.nnet, self.args)
 
             while not self.game.isTerminal(state):
@@ -149,13 +154,19 @@ class Coach:
     def executeEpisode(self):
         """
         Self-play with random coords if we are not reading from file => Overwrite the game coords.
-        Then do MCTS from random start => leftover distance as target value.
+        Then do MCTS from configured start node => leftover distance as target value.
         """
         if not self.args.read_from_file:
             new_coords = np.random.rand(self.game.num_nodes, 2).tolist()
             self.game.node_coordinates = new_coords
 
-        state = self.game.getInitState()
+        # Modified start node selection
+        if self.args.get("fixed_start", True):
+            start_node = self.args.get("fixed_start_node", 0)
+        else:
+            start_node = np.random.choice(self.game.num_nodes)
+
+        state = self.game.getInitState(start_node=start_node)
         trajectory = []
 
         while not self.game.isTerminal(state):
@@ -308,13 +319,28 @@ class Coach:
 
         from TSPState import TSPState
 
-        new_state = TSPState(n, new_coords)
+        # Create new distance matrix based on permutation
+        if state.distance_matrix is not None:
+            old_matrix = state.distance_matrix
+            new_matrix = np.zeros_like(old_matrix)
+            for i in range(n):
+                for j in range(n):
+                    new_matrix[perm[i]][perm[j]] = old_matrix[i][j]
+        else:
+            new_matrix = None
+
+        new_state = TSPState(
+            n,
+            new_coords,
+            distance_matrix=new_matrix,
+            start_node=perm[state.tour[0]] if state.tour else None,
+        )
         new_state.tour = new_tour
         new_state.unvisited = new_unvisited
         # if you recompute the partial cost, do:
         # new_state.current_length = self.recomputeTourLength(new_state)
         # otherwise copy:
-        # new_state.current_length = state.current_length
+        new_state.current_length = state.current_length
 
         # reorder pi
         new_pi = np.zeros(n, dtype=float)
@@ -354,12 +380,17 @@ class Coach:
 
         from TSPState import TSPState
 
-        new_state = TSPState(state.num_nodes, rotated_coords)
+        # For rotation, we need to recompute the distance matrix since distances change
+        # But we can also keep the same distances if simplicity is preferred
+        new_state = TSPState(
+            state.num_nodes,
+            rotated_coords,
+            distance_matrix=state.distance_matrix,  # Reuse same matrix for simplicity
+            start_node=state.tour[0] if state.tour else None,
+        )
         new_state.tour = list(state.tour)
         new_state.unvisited = state.unvisited.copy()
-        # new_state.current_length = state.current_length
-        # or if TSP code automatically re-checks distances, do:
-        # new_state.current_length = self.recomputeTourLength(new_state)
+        new_state.current_length = state.current_length
 
         return new_state, np.array(pi, copy=True)
 

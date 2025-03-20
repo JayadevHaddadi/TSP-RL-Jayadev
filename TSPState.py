@@ -2,13 +2,23 @@ import numpy as np
 
 
 class TSPState:
-    def __init__(self, num_nodes, node_coordinates, distance_matrix):
+    def __init__(
+        self, num_nodes, node_coordinates, distance_matrix=None, start_node=None
+    ):
         self.num_nodes = num_nodes
         self.node_coordinates = node_coordinates
-        self.distance_matrix = distance_matrix
-        self.tour = []  # empty
-        self.unvisited = np.ones(num_nodes, dtype=int)  # all nodes unvisited
+        self.tour = []
+        self.unvisited = np.ones(num_nodes, dtype=int)  # 1=unvisited, 0=visited
+
+        # Initialize with start node if specified
+        if start_node is not None:
+            if start_node < 0 or start_node >= num_nodes:
+                raise ValueError(f"Invalid start node: {start_node}")
+            self.tour.append(start_node)
+            self.unvisited[start_node] = 0
+
         self.current_length = 0.0
+        self.distance_matrix = distance_matrix
 
     def execute_action(self, action):
         """

@@ -65,12 +65,21 @@ class TSPGame:
             x2, y2 = self.node_coordinates[j]
             return np.hypot(x2 - x1, y2 - y1)
 
-    def getInitState(self):
-        # Pass both coordinates and distance matrix to the state
-        s = TSPState(self.num_nodes, self.node_coordinates, self.distance_matrix)
-        if hasattr(self, "node_type"):
-            s.node_type = self.node_type
-        return s
+    def getInitState(self, start_node=None):
+        if start_node is None:
+            # Default to random start if not specified
+            start_node = (
+                0
+                if self.args.get("fixed_start", True)
+                else np.random.choice(self.num_nodes)
+            )
+
+        return TSPState(
+            num_nodes=self.num_nodes,
+            node_coordinates=self.node_coordinates,
+            distance_matrix=self.distance_matrix,
+            start_node=start_node,
+        )
 
     def getNumberOfNodes(self):
         return self.num_nodes

@@ -33,7 +33,7 @@ class MCTS:
         uniqueStringe = self.game.uniqueStringRepresentation(state)
         for _ in range(self.args.numMCTSSims):
             self.search(state, uniqueStringe)  # Pass the precomputed string
-        
+
         counts = [
             self.Nsa[(uniqueStringe, a)] if (uniqueStringe, a) in self.Nsa else 0
             for a in range(self.game.getActionSize())
@@ -50,14 +50,18 @@ class MCTS:
         return probs
 
     def search(self, tsp_state: TSPState, state_str=None):
-        state_string = state_str if state_str is not None else self.game.uniqueStringRepresentation(tsp_state)
+        state_string = (
+            state_str
+            if state_str is not None
+            else self.game.uniqueStringRepresentation(tsp_state)
+        )
 
         if state_string not in self.Es:
-            if self.game.isTerminal(tsp_state): # Terminal
+            if self.game.isTerminal(tsp_state):  # Terminal
                 self.Es[state_string] = self.game.getFinalScore(tsp_state)
                 return self.Es[state_string]
             else:
-                self.Es[state_string] = None # Not terminal
+                self.Es[state_string] = None  # Not terminal
         if self.Es[state_string] != None:
             # terminal node
             return self.Es[state_string]
@@ -69,7 +73,7 @@ class MCTS:
             else:
                 self.Ps[state_string], leftover_v = self.nnet.predict(tsp_state)
                 self.Pred_cache[state_string] = (self.Ps[state_string], leftover_v)
-            
+
             total_cost = tsp_state.current_length + leftover_v
             v = -total_cost
 
@@ -88,7 +92,6 @@ class MCTS:
             self.Ns[state_string] = 0
             return v
 
-
         # Internal Node
         valids = self.Vs[state_string]
         cur_best = -float("inf")
@@ -98,11 +101,17 @@ class MCTS:
         for a in range(self.game.getActionSize()):
             if valids[a]:
                 if (state_string, a) in self.Qsa:
-                    u = self.Qsa[(state_string, a)] + self.args.cpuct * self.Ps[state_string][a] * math.sqrt(
-                        self.Ns[state_string]
-                    ) / (1 + self.Nsa[(state_string, a)])
+                    u = self.Qsa[(state_string, a)] + self.args.cpuct * self.Ps[
+                        state_string
+                    ][a] * math.sqrt(self.Ns[state_string]) / (
+                        1 + self.Nsa[(state_string, a)]
+                    )
                 else:
-                    u = self.args.cpuct * self.Ps[state_string][a] * math.sqrt(self.Ns[state_string] + EPS)
+                    u = (
+                        self.args.cpuct
+                        * self.Ps[state_string][a]
+                        * math.sqrt(self.Ns[state_string] + EPS)
+                    )
                 if u > cur_best:
                     cur_best = u
                     best_act = a
@@ -123,3 +132,23 @@ class MCTS:
 
         self.Ns[state_string] += 1
         return v
+
+    def simulate(self, state):
+        # ... existing simulation code ...
+        if random.random() < 0.2:  # 20% chance to apply local search
+            improved_state = self.two_opt_improvement(state)
+            return improved_state.current_length
+
+    def two_opt_improvement(self, state):
+        best = state.current_length
+        improved = True
+        while improved:
+            improved = False
+            for i in range(len(state.tour) - 1):
+                for j in range(i + 2, len(state.tour)):
+                    # Try 2-opt swap
+                    new_length = self.calculate_swap(state, i, j)
+                    if new_length < best:
+                        best = new_length
+                        improved = True
+        return state

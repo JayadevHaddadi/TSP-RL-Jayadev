@@ -246,6 +246,53 @@ def main():
 
     # Example of using a preset configuration:
     arch_list = [
+        (
+            "light",  # Name of the experiment
+            {
+                **preset_configs["light"],
+                "numMCTSSims": 25,
+                "numMCTSSimsEval": 25,
+                "numEps": 5,
+            },
+        ),
+        # (
+        #     "heavy",  # Name of the experiment
+        #     {
+        #         **preset_configs["heavy"],  # Use heavy configuration
+        #         "numMCTSSims": 150,
+        #         "numMCTSSimsEval": 150,
+        #         "numEps": 10,
+        #     },
+        # ),
+        # (
+        #     "medium",  # Name of the experiment
+        #     {
+        #         **preset_configs["medium"],
+        #         "numMCTSSims": 50,
+        #         "numMCTSSimsEval": 50,
+        #         "numEps": 7,
+        #     },
+        # ),
+        # (
+        #     "pointer_light",  # Name of the experiment
+        #     {
+        #         "architecture": "pointer",
+        #         **preset_configs["light"],
+        #         "numMCTSSims": 25,
+        #         "numMCTSSimsEval": 25,
+        #         "numEps": 5,
+        #     },
+        # ),
+        # (
+        #     "transformer_light",  # Name of the experiment
+        #     {
+        #         "architecture": "transformer_deepseek",
+        #         **preset_configs["light"],
+        #         "numMCTSSims": 25,
+        #         "numMCTSSimsEval": 25,
+        #         "numEps": 5,
+        #     },
+        # ),
         # (
         #     "burma14_light",  # Name of the experiment
         #     {
@@ -265,16 +312,16 @@ def main():
         #         "numEps": 7,
         #     },
         # ),
-        (
-            "burma14_transformer_deepseek_light",  # Name of the experiment
-            {
-                "architecture": "transformer_deepseek",
-                **preset_configs["medium"],
-                "numMCTSSims": 50,
-                "numMCTSSimsEval": 50,
-                "numEps": 7,
-            },
-        ),
+        # (
+        #     "burma14_transformer_deepseek_light",  # Name of the experiment
+        #     {
+        #         "architecture": "transformer_deepseek",
+        #         **preset_configs["medium"],
+        #         "numMCTSSims": 50,
+        #         "numMCTSSimsEval": 50,
+        #         "numEps": 7,
+        #     },
+        # ),
         # (
         #     "burma14_heavy",  # Name of the experiment
         #     {

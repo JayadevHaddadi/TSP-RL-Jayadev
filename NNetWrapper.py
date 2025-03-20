@@ -39,6 +39,10 @@ class NNetWrapper(NeuralNet):
             from TSPNNet_Conformer import ConformerNNet
 
             self.nnet = ConformerNNet(game, args)
+        elif args.get("architecture") == "graphpointer":
+            from TSPNNet_GraphPointer import GraphPointerNet
+
+            self.nnet = GraphPointerNet(game, args)
         else:
             raise Exception("No known NN architecture")
 

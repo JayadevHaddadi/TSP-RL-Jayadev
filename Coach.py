@@ -1,6 +1,7 @@
 import logging
 import os
 import csv
+import copy
 from pickle import Pickler, Unpickler
 from random import shuffle
 
@@ -35,6 +36,8 @@ class Coach:
         """
         self.game = game
         self.nnet = nnet
+        # Instead of copying the network, we'll create a new instance with the same architecture
+        self.champion_nnet = None  # Will be initialized in learn()
         self.args = args
         self.folder = folder or "."
 
@@ -62,6 +65,10 @@ class Coach:
         self.iteration_pi_loss_history = []
         self.iteration_v_loss_history = []
         self.eval_avg_length_history = []
+
+        # Track accept/reject decisions
+        self.accepted_iterations = []
+        self.rejected_iterations = []
 
         # We'll store the large chart of policy/value losses in the main run folder
         self.losses_file = os.path.join(self.folder, "losses.csv")
@@ -205,6 +212,19 @@ class Coach:
         return examples
 
     def learn(self):
+        # Initialize the champion network - use the same configuration as self.nnet
+        # Create a new instance instead of deepcopy to avoid copy issues
+        self.champion_nnet = type(self.nnet)(self.game, self.args)
+
+        # Save the initial network state and load it into champion
+        temp_path = os.path.join(self.args.checkpoint, "temp_initial.pth.tar")
+        self.nnet.save_checkpoint(self.args.checkpoint, "temp_initial.pth.tar")
+        self.champion_nnet.load_checkpoint(self.args.checkpoint, "temp_initial.pth.tar")
+
+        # Remove the temporary file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
         for i in range(1, self.args.numIters + 1):
             log.info(f"=== Starting Iter #{i} ===")
             iterationTrainExamples = []
@@ -272,30 +292,92 @@ class Coach:
             shuffle(trainExamples)
 
             log.info(f"Number of training examples: {len(trainExamples)}")
-            self.nnet.save_checkpoint(self.args.checkpoint, "temp.pth.tar")
 
+            # Save current champion network state as a backup
+            self.champion_nnet.save_checkpoint(self.args.checkpoint, "champion.pth.tar")
+
+            # Train the current network (self.nnet) with the new examples
+            self.nnet.save_checkpoint(self.args.checkpoint, "temp.pth.tar")
             pi_loss, v_loss = self.nnet.train(trainExamples)
             self.iteration_pi_loss_history.append(pi_loss)
             self.iteration_v_loss_history.append(v_loss)
 
-            # Evaluate on stable coords, etc...
-            eval_lens = self.evaluateAllCoords()
-            avg_len = float(np.mean(eval_lens)) if eval_lens else float("inf")
-            self.eval_avg_length_history.append(avg_len)
-            self.eval_set_lengths_history.append(eval_lens)
+            # === COMPETITIVE EVALUATION ===
+            # Evaluate both networks to compare performance
+            log.info("Evaluating champion and challenger networks...")
 
-            # Store these set-level lengths for multi-subplot
-            self.eval_set_lengths_history.append(eval_lens)
+            # Evaluate the champion network
+            champion_lens = self.evaluateWithNetwork(self.champion_nnet)
+            champion_avg_len = (
+                float(np.mean(champion_lens)) if champion_lens else float("inf")
+            )
+            log.info(f"Champion avg length: {champion_avg_len:.4f}")
 
-            log.info(f"Avg length on stable eval sets: {avg_len:.4f}")
+            # Evaluate the challenger (newly trained) network
+            challenger_lens = self.evaluateAllCoords()  # Uses self.nnet
+            challenger_avg_len = (
+                float(np.mean(challenger_lens)) if challenger_lens else float("inf")
+            )
+            log.info(f"Challenger avg length: {challenger_avg_len:.4f}")
 
-            # If improved => store as best, else keep going
-            if avg_len <= self.best_avg_length:
-                self.best_avg_length = avg_len
-                log.info("New best average => saving model as best.pth.tar")
-                self.nnet.save_checkpoint(self.args.checkpoint, "best.pth.tar")
+            # Store challenger results for plotting
+            self.eval_avg_length_history.append(challenger_avg_len)
+            self.eval_set_lengths_history.append(challenger_lens)
+
+            # Compare the two networks
+            if challenger_avg_len <= champion_avg_len:
+                # Challenger is better or equal - accept the new network
+                log.info(
+                    f"[ACCEPTED] New network is better ({challenger_avg_len:.4f} vs {champion_avg_len:.4f})"
+                )
+                self.accepted_iterations.append(i)
+
+                # Update champion network with the challenger's weights by saving and loading checkpoint
+                # No need for deepcopy which may not work with some neural networks
+                self.nnet.save_checkpoint(
+                    self.args.checkpoint, "champion_update.pth.tar"
+                )
+                self.champion_nnet.load_checkpoint(
+                    self.args.checkpoint, "champion_update.pth.tar"
+                )
+
+                # Clean up temporary file
+                temp_path = os.path.join(
+                    self.args.checkpoint, "champion_update.pth.tar"
+                )
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+
+                # If this is also better than our best so far, save as best.pth.tar
+                if challenger_avg_len <= self.best_avg_length:
+                    self.best_avg_length = challenger_avg_len
+                    log.info("New best average => saving model as best.pth.tar")
+                    self.nnet.save_checkpoint(self.args.checkpoint, "best.pth.tar")
             else:
-                log.info("No improvement => continuing")
+                # Champion is better - reject the new network
+                log.info(
+                    f"[REJECTED] Champion network is better ({champion_avg_len:.4f} vs {challenger_avg_len:.4f})"
+                )
+                self.rejected_iterations.append(i)
+
+                # Revert to champion network - load champion weights into current network
+                self.champion_nnet.save_checkpoint(
+                    self.args.checkpoint, "revert_to_champion.pth.tar"
+                )
+                self.nnet.load_checkpoint(
+                    self.args.checkpoint, "revert_to_champion.pth.tar"
+                )
+
+                # Clean up temporary file
+                temp_path = os.path.join(
+                    self.args.checkpoint, "revert_to_champion.pth.tar"
+                )
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+
+                # Update the eval history with champion's performance instead
+                self.eval_avg_length_history[-1] = champion_avg_len
+                self.eval_set_lengths_history[-1] = champion_lens
 
             # Plot one or all stable sets?
             # If you want to plot all sets every X iterations
@@ -314,9 +396,9 @@ class Coach:
                     )
 
             # Plot overall losses & single-line average
-            self.plot_loss_and_length_history(i, avg_len)
-            # Also plot the multi-subplot figure for each evaluation set
-            # self.plotMultiEvalSubplots(i)
+            self.plot_loss_and_length_history(i, self.eval_avg_length_history[-1])
+            # Also plot acceptance/rejection history
+            self.plot_acceptance_history(i)
 
     def augmentExamples(self, original_data):
         """
@@ -485,6 +567,49 @@ class Coach:
         self.args.numMCTSSims = original_sims
         return lengths
 
+    def evaluateWithNetwork(self, network):
+        """
+        Evaluate the given network on the entire coords_for_eval list.
+        Return a list of final lengths, one per eval set.
+        """
+        if not self.coords_for_eval:
+            log.info(
+                "No coords_for_eval => skipping stable evaluation => returning empty list"
+            )
+            return []
+
+        original_sims = self.args.numMCTSSims
+        self.args.numMCTSSims = self.args.numMCTSSimsEval
+
+        lengths = []
+        for _, coords in enumerate(self.coords_for_eval):
+            self.game.node_coordinates = coords
+            start_node = (
+                self.args.get("fixed_start_node", 0)
+                if self.args.get("fixed_start", True)
+                else None
+            )
+            state = self.game.getInitState(start_node=start_node)
+            temp_mcts = MCTS(self.game, network, self.args)
+
+            while not self.game.isTerminal(state):
+                pi = temp_mcts.getActionProb(state, temp=0)
+                pi = np.array(pi, dtype=float)
+                pi *= self.game.getValidMoves(state)
+                sum_pi = np.sum(pi)
+                if sum_pi < 1e-12:
+                    break
+                pi /= sum_pi
+
+                action = np.argmax(pi)
+                state = self.game.getNextState(state, action)
+
+            length = state.current_length
+            lengths.append(length)
+
+        self.args.numMCTSSims = original_sims
+        return lengths
+
     ###############################################################################
     # 2) Where you used 'plotAllEvalTours', rename folder to 'tours/other sets'
     #    Also note we only do this every X iterations and skip set #1 if you desire.
@@ -575,6 +700,57 @@ class Coach:
 
         self.args.numMCTSSims = original_sims
 
+    def plot_acceptance_history(self, iteration):
+        """
+        Create a plot showing which iterations were accepted and rejected.
+        """
+        fig, ax = plt.subplots(figsize=(12, 3))
+
+        # Plot all iterations
+        all_iters = list(range(1, iteration + 1))
+        ax.scatter(
+            all_iters,
+            [0] * len(all_iters),
+            color="grey",
+            alpha=0.3,
+            s=50,
+            label="All Iterations",
+        )
+
+        # Plot accepted iterations
+        if self.accepted_iterations:
+            ax.scatter(
+                self.accepted_iterations,
+                [0] * len(self.accepted_iterations),
+                color="green",
+                marker="^",
+                s=100,
+                label="Accepted",
+            )
+
+        # Plot rejected iterations
+        if self.rejected_iterations:
+            ax.scatter(
+                self.rejected_iterations,
+                [0] * len(self.rejected_iterations),
+                color="red",
+                marker="x",
+                s=100,
+                label="Rejected",
+            )
+
+        # Remove y-axis ticks since this is just a timeline
+        ax.set_yticks([])
+        ax.set_xlabel("Iteration")
+        ax.set_title("Network Acceptance/Rejection History")
+        ax.grid(axis="x", alpha=0.3)
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=3)
+
+        # Save plot
+        acceptance_plot_path = os.path.join(self.folder, f"acceptance_history.png")
+        fig.savefig(acceptance_plot_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+
     def plot_loss_and_length_history(self, iteration, eval_len):
         """
         We'll store the chart in the main folder (not in "graphs").
@@ -592,6 +768,27 @@ class Coach:
             color="blue",
             linewidth=2,
         )
+
+        # Mark accepted and rejected iterations
+        for i in self.accepted_iterations:
+            if i <= len(self.eval_avg_length_history):
+                axL.scatter(
+                    i,
+                    self.eval_avg_length_history[i - 1],
+                    color="green",
+                    marker="^",
+                    s=80,
+                )
+
+        for i in self.rejected_iterations:
+            if i <= len(self.eval_avg_length_history):
+                axL.scatter(
+                    i,
+                    self.eval_avg_length_history[i - 1],
+                    color="red",
+                    marker="x",
+                    s=80,
+                )
 
         # Add horizontal line for the optimal solution length if available
         if self.best_tour_length is not None:

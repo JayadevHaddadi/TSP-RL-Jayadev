@@ -187,7 +187,7 @@ def main():
             # MCTS & Evaluation Parameters
             #####################################
             "numMCTSSims": 100,  # Number of MCTS simulations during training
-            "numMCTSSimsEval": 100,  # Number of MCTS simulations during evaluation
+            "numMCTSSimsEval": 150,  # Number of MCTS simulations during evaluation
             "maxlenOfQueue": 200000,  # Maximum length of the queue
             "cpuct": 1.0,  # Exploration constant in MCTS
             # Training History
@@ -247,13 +247,41 @@ def main():
 
     # Example of using a preset configuration:
     arch_list = [
+        # (
+        #     "medium",  # Name of the experiment
+        #     {
+        #         **preset_configs["medium"],
+        #         # "numMCTSSims": 25,
+        #         # "numMCTSSimsEval": 25,
+        #         "numEps": 50,
+        #     },
+        # ),
         (
-            "light",  # Name of the experiment
+            "medium",  # Name of the experiment
+            {
+                **preset_configs["medium"],
+                "numMCTSSims": 50,
+                "numMCTSSimsEval": 50,
+                "numEps": 10,
+            },
+        ),
+        (
+            "light_more_mcts",  # Name of the experiment
+            {
+                **preset_configs["light"],
+                "numMCTSSims": 100,
+                "numMCTSSimsEval": 150,
+                "numEps": 10,
+                
+            },
+        ),
+        (
+            "light_high_episodes",  # Name of the experiment
             {
                 **preset_configs["light"],
                 "numMCTSSims": 25,
                 "numMCTSSimsEval": 25,
-                "numEps": 5,
+                "numEps": 50,
             },
         ),
         # (

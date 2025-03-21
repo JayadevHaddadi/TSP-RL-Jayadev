@@ -78,8 +78,14 @@ class Coach:
                 ["Iteration", "Epoch", "Batch", "Policy Loss", "Value Loss"]
             )
 
+        # Add tracking for best tour lengths for each evaluation set
+        self.best_eval_lengths = (
+            [float("inf")] * len(self.coords_for_eval) if self.coords_for_eval else []
+        )
+        
         # Optionally run a pre-training eval
         self.preTrainingEval()
+
 
     ###############################################################################
     # 1) Updated 'preTrainingEval' method to match the same folder structure
@@ -136,6 +142,9 @@ class Coach:
             length = state.current_length
             total_len += length
             log.info(f"[PreTrainEval] Set {idx+1}/{N}, length = {length:.4f}")
+
+            # Always save pre-training evaluations (these are the initial best lengths)
+            self.best_eval_lengths[idx] = length
 
             # Save under the same naming logic as post-training:
             if idx == 0:
@@ -398,7 +407,7 @@ class Coach:
             # Plot overall losses & single-line average
             self.plot_loss_and_length_history(i, self.eval_avg_length_history[-1])
             # Also plot acceptance/rejection history
-            self.plot_acceptance_history(i)
+            # self.plot_acceptance_history(i)
 
     def augmentExamples(self, original_data):
         """
@@ -617,10 +626,11 @@ class Coach:
     def plotAllEvalTours(self, iteration):
         """
         Evaluate + plot final routes for *all* stable coords in subplots or individually,
-        but saving them in 'tours/other sets', named 'set{k}_iter_{iteration:03d}_len_{X}.png'.
+        but only if they represent an improvement over the previous best.
+        Saving them in 'tours/other sets', named 'set{k}_iter_{iteration:03d}_len_{X}.png'.
         Typically called only every 'plot_all_eval_sets_interval' iteration.
         """
-        log.info(f"Plotting all stable tours for iteration {iteration} ...")
+        log.info(f"Evaluating all stable tours for iteration {iteration} ...")
 
         # The 'other sets' folder
         other_folder = os.path.join(self.folder, "tours", "other sets")
@@ -629,12 +639,7 @@ class Coach:
         original_sims = self.args.numMCTSSims
         self.args.numMCTSSims = self.args.numMCTSSimsEval
 
-        # If you want to skip set #1 here (since you're plotting it every iteration),
-        # you can do coords_for_eval[1:] below. But if you want all sets, use entire list:
         for idx, coords in enumerate(self.coords_for_eval):
-            # If you'd like to skip the first set in 'other sets', do:
-            # if idx == 0: continue  # skip set1
-
             self.game.node_coordinates = coords
             state = self.game.getInitState()
             temp_mcts = MCTS(self.game, self.nnet, self.args)
@@ -651,13 +656,26 @@ class Coach:
                 state = self.game.getNextState(state, action)
 
             length = state.current_length
-            filename = f"set{idx+1}_iter_{iteration:03d}_len_{length:.4f}.png"
-            out_path = os.path.join(other_folder, filename)
-            self.game.plotTour(
-                state,
-                title=f"EvalSet {idx+1}, Iter={iteration}, Len={length:.4f}",
-                save_path=out_path,
-            )
+
+            # Check if this is an improvement (strictly better)
+            if length < self.best_eval_lengths[idx]:
+                log.info(
+                    f"Set {idx+1}: New best length {length:.4f} (previous: {self.best_eval_lengths[idx]:.4f})"
+                )
+                self.best_eval_lengths[idx] = length
+
+                # Only save plot for improvements
+                filename = f"set{idx+1}_iter_{iteration:03d}_len_{length:.4f}.png"
+                out_path = os.path.join(other_folder, filename)
+                self.game.plotTour(
+                    state,
+                    title=f"EvalSet {idx+1}, Iter={iteration}, Len={length:.4f} (Improvement)",
+                    save_path=out_path,
+                )
+            else:
+                log.info(
+                    f"Set {idx+1}: Length {length:.4f} is not an improvement over {self.best_eval_lengths[idx]:.4f} - skipping plot"
+                )
 
         self.args.numMCTSSims = original_sims
 
@@ -666,7 +684,8 @@ class Coach:
     ###############################################################################
     def plotSingleEvalTour(self, coords, iteration, set_idx=1):
         """
-        Plots the final route for coordinate set #1 each iteration.
+        Plots the final route for coordinate set #1 each iteration,
+        but only if it's an improvement over the previous best.
         Output file in 'tours/' => 'iter_{iteration:03d}_len_{length:.4f}.png'
         """
         tours_folder = os.path.join(self.folder, "tours")
@@ -691,12 +710,28 @@ class Coach:
             state = self.game.getNextState(state, action)
 
         length = state.current_length
-        filename = f"iter_{iteration:03d}_len_{length:.4f}.png"
-        out_path = os.path.join(tours_folder, filename)
 
-        self.game.plotTour(
-            state, title=f"Set1, Iter={iteration}, Len={length:.4f}", save_path=out_path
-        )
+        # Check if this is an improvement (strictly better)
+        set_idx_zero_based = set_idx - 1  # Convert 1-based to 0-based index
+        if length < self.best_eval_lengths[set_idx_zero_based]:
+            log.info(
+                f"Set {set_idx}: New best length {length:.4f} (previous: {self.best_eval_lengths[set_idx_zero_based]:.4f})"
+            )
+            self.best_eval_lengths[set_idx_zero_based] = length
+
+            # Only save plot for improvements
+            filename = f"iter_{iteration:03d}_len_{length:.4f}.png"
+            out_path = os.path.join(tours_folder, filename)
+
+            self.game.plotTour(
+                state,
+                title=f"Set{set_idx}, Iter={iteration}, Len={length:.4f} (Improvement)",
+                save_path=out_path,
+            )
+        else:
+            log.info(
+                f"Set {set_idx}: Length {length:.4f} is not an improvement over {self.best_eval_lengths[set_idx_zero_based]:.4f} - skipping plot"
+            )
 
         self.args.numMCTSSims = original_sims
 

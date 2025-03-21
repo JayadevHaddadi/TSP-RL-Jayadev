@@ -256,32 +256,31 @@ def main():
         #         "numEps": 50,
         #     },
         # ),
+        # (
+        #     "medium",  # Name of the experiment
+        #     {
+        #         **preset_configs["medium"],
+        #         "numMCTSSims": 50,
+        #         "numMCTSSimsEval": 50,
+        #         "numEps": 10,
+        #     },
+        # ),
+        # (
+        #     "light_more_mcts",  # Name of the experiment
+        #     {
+        #         **preset_configs["light"],
+        #         "numMCTSSims": 100,
+        #         "numMCTSSimsEval": 150,
+        #         "numEps": 10,
+        #     },
+        # ),
         (
-            "medium",  # Name of the experiment
-            {
-                **preset_configs["medium"],
-                "numMCTSSims": 50,
-                "numMCTSSimsEval": 50,
-                "numEps": 10,
-            },
-        ),
-        (
-            "light_more_mcts",  # Name of the experiment
-            {
-                **preset_configs["light"],
-                "numMCTSSims": 100,
-                "numMCTSSimsEval": 150,
-                "numEps": 10,
-                
-            },
-        ),
-        (
-            "light_high_episodes",  # Name of the experiment
+            "light",  # Name of the experiment
             {
                 **preset_configs["light"],
                 "numMCTSSims": 25,
                 "numMCTSSimsEval": 25,
-                "numEps": 50,
+                "numEps": 5,
             },
         ),
         # (

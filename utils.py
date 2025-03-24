@@ -192,6 +192,7 @@ def load_tsp_instance(filepath):
     best_tour_length = None
     dimension = 0
     reading_coords = False
+    EDGE_WEIGHT_TYPE = "GEO"
 
     with open(filepath, "r") as f:
         for line in f:
@@ -209,6 +210,8 @@ def load_tsp_instance(filepath):
             # End of file
             elif line == "EOF" or line.startswith("DISPLAY_DATA_SECTION"):
                 break
+            elif line.startswith("EDGE_WEIGHT_TYPE"): 
+                EDGE_WEIGHT_TYPE = line.split()[-1]
             # Read coordinates if we're in the coordinates section
             elif reading_coords:
                 parts = line.split()
@@ -235,7 +238,7 @@ def load_tsp_instance(filepath):
     if best_tour_length:
         logging.info(f"Best known solution length: {best_tour_length}")
 
-    return coords, best_tour_length
+    return coords, best_tour_length, EDGE_WEIGHT_TYPE
 
 def log_configuration(config):
     """Dynamically logs all configuration key-value pairs."""

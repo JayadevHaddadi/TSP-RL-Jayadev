@@ -43,14 +43,16 @@ class TSPGame:
 
     def _calculate_distance(self, i, j):
         """Calculate distance between two nodes (used for matrix precomputation)"""
-        if self.node_type == "tsplib":
+        if self.node_type == "GEO":
             # Use the correct TSPLIB GEO calculation
             return geo_distance(self.node_coordinates[i], self.node_coordinates[j])
-        else:
+        elif self.node_type == "EUC_2D":
             # Euclidean distance for random instances
             x1, y1 = self.node_coordinates[i]
             x2, y2 = self.node_coordinates[j]
             return np.hypot(x2 - x1, y2 - y1)
+        else:
+            raise ValueError(f"Invalid node type: {self.node_type}")
 
     def getInitState(self, start_node=None):
         if start_node is None:
@@ -153,57 +155,88 @@ class TSPGame:
             plt.show()
 
 
-def geo_distance(city1, city2):
+# def geo_distance(city1, city2):
+#     """
+#     Compute the TSPLIB GEO distance between two cities.
+#     Each city's coordinate is given as (latitude, longitude) in TSPLIB format.
+#     The conversion is:
+#        Convert coordinate value X into degrees and minutes:
+#          degrees = int(X)
+#          minutes = X - degrees
+#        Then compute the angle in radians:
+#          angle = π*(degrees + 5.0*minutes/3.0) / 180
+#     Finally, compute the spherical (great-circle) distance using
+#          d = R * arccos( cos(lat1)*cos(lat2)*cos(lon1 - lon2) + sin(lat1)*sin(lat2) )
+#     and round each edge as: int(d + 0.5)
+#     """
+#     # Unpack coordinates for both cities
+#     lat1, lon1 = city1
+#     lat2, lon2 = city2
+
+#     # Convert latitude and longitude into degrees and fractional minutes
+#     lat1_deg = int(lat1)
+#     lat1_min = lat1 - lat1_deg
+#     lat2_deg = int(lat2)
+#     lat2_min = lat2 - lat2_deg
+
+#     lon1_deg = int(lon1)
+#     lon1_min = lon1 - lon1_deg
+#     lon2_deg = int(lon2)
+#     lon2_min = lon2 - lon2_deg
+
+#     # Convert to radians using the TSPLIB GEO transformation
+#     lat1_rad = math.radians(lat1_deg + 5.0 * lat1_min / 3.0)
+#     lat2_rad = math.radians(lat2_deg + 5.0 * lat2_min / 3.0)
+#     lon1_rad = math.radians(lon1_deg + 5.0 * lon1_min / 3.0)
+#     lon2_rad = math.radians(lon2_deg + 5.0 * lon2_min / 3.0)
+
+#     # TSPLIB recommends an Earth radius for GEO data of 6378.388 km
+#     R = 6378.388
+
+#     # Compute the spherical law of cosines component
+#     q = math.cos(lat1_rad) * math.cos(lat2_rad) * math.cos(
+#         lon1_rad - lon2_rad
+#     ) + math.sin(lat1_rad) * math.sin(lat2_rad)
+#     # Clamp q to avoid floating-point precision issues
+#     q = max(min(q, 1.0), -1.0)
+
+#     # Compute the distance between the two cities
+#     d = R * math.acos(q)
+
+#     # Round the edge length exactly as in TSPLIB (round to nearest integer)
+#     return int(d + 0.5)
+
+def geo_distance(node1, node2):
     """
-    Compute the TSPLIB GEO distance between two cities.
-    Each city's coordinate is given as (latitude, longitude) in TSPLIB format.
-    The conversion is:
-       Convert coordinate value X into degrees and minutes:
-         degrees = int(X)
-         minutes = X - degrees
-       Then compute the angle in radians:
-         angle = π*(degrees + 5.0*minutes/3.0) / 180
-    Finally, compute the spherical (great-circle) distance using
-         d = R * arccos( cos(lat1)*cos(lat2)*cos(lon1 - lon2) + sin(lat1)*sin(lat2) )
-    and round each edge as: int(d + 0.5)
+    Calculate the geographical distance between two nodes.
+
+    Args:
+        node1 (tuple): (latitude, longitude) in degrees.
+        node2 (tuple): (latitude, longitude) in degrees.
+
+    Returns:
+        int: The geographical distance between the two nodes.
     """
-    # Unpack coordinates for both cities
-    lat1, lon1 = city1
-    lat2, lon2 = city2
+    PI = 3.141592
+    RRR = 6378.388  # Radius of the Earth in kilometers
 
-    # Convert latitude and longitude into degrees and fractional minutes
-    lat1_deg = int(lat1)
-    lat1_min = lat1 - lat1_deg
-    lat2_deg = int(lat2)
-    lat2_min = lat2 - lat2_deg
+    def deg_to_rad(deg):
+        return PI * deg / 180.0
 
-    lon1_deg = int(lon1)
-    lon1_min = lon1 - lon1_deg
-    lon2_deg = int(lon2)
-    lon2_min = lon2 - lon2_deg
+    lat1, lon1 = node1
+    lat2, lon2 = node2
 
-    # Convert to radians using the TSPLIB GEO transformation
-    lat1_rad = math.radians(lat1_deg + 5.0 * lat1_min / 3.0)
-    lat2_rad = math.radians(lat2_deg + 5.0 * lat2_min / 3.0)
-    lon1_rad = math.radians(lon1_deg + 5.0 * lon1_min / 3.0)
-    lon2_rad = math.radians(lon2_deg + 5.0 * lon2_min / 3.0)
+    rad_lat1 = deg_to_rad(lat1)
+    rad_lon1 = deg_to_rad(lon1)
+    rad_lat2 = deg_to_rad(lat2)
+    rad_lon2 = deg_to_rad(lon2)
 
-    # TSPLIB recommends an Earth radius for GEO data of 6378.388 km
-    R = 6378.388
+    q1 = math.cos(rad_lon1 - rad_lon2)
+    q2 = math.cos(rad_lat1 - rad_lat2)
+    q3 = math.cos(rad_lat1 + rad_lat2)
 
-    # Compute the spherical law of cosines component
-    q = math.cos(lat1_rad) * math.cos(lat2_rad) * math.cos(
-        lon1_rad - lon2_rad
-    ) + math.sin(lat1_rad) * math.sin(lat2_rad)
-    # Clamp q to avoid floating-point precision issues
-    q = max(min(q, 1.0), -1.0)
-
-    # Compute the distance between the two cities
-    d = R * math.acos(q)
-
-    # Round the edge length exactly as in TSPLIB (round to nearest integer)
-    return int(d + 0.5)
-
+    dij = RRR * math.acos(0.5 * ((1.0 + q1) * q2 - (1.0 - q1) * q3))
+    return int(dij + 0.5)
 
 def compute_tour_length(tour, coordinates):
     """

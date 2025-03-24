@@ -832,6 +832,17 @@ class Coach:
             color="blue",
             linewidth=2,
         )
+        
+        # Mark accepted and (NOT rejected iterations)
+        for i in self.accepted_iterations:
+            if i <= len(self.eval_avg_length_history):
+                axL.scatter(
+                    i,
+                    self.eval_avg_length_history[i - 1],
+                    color="blue",
+                    marker="^",
+                    s=80,
+                )
 
         # Add best episode tour length as a separate line if we have history
         if self.best_episode_tour_history:

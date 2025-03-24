@@ -2,7 +2,7 @@ import os
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
-import NNetWrapper
+from NNetWrapper import NNetWrapper
 from MCTS import MCTS
 import logging
 from TSPGame import TSPGame
@@ -87,13 +87,14 @@ class Evaluator:
 
 args = dotdict(
     {
+        "architecture": "gcn",  # Options: "gcn", "pointer", "transformer", "conformer"
         "numIters": 1000,
         "numEps": 10,
         "tempThreshold": 15,
         "maxlenOfQueue": 200000,
         "numMCTSSims": 25,
         "cpuct": 1,
-        "checkpoint": "./runs/250108-154357_20_rand/checkpoints",  # Will be updated later
+        "checkpoint": "./runs/250321-141833_burma14_light Near SOL/checkpoints",  # Will be updated later
         # runs/6_nodes_random_20241205-104555/checkpoints
         "load_model": False,
         "load_folder_file": ("./temp", "best.pth.tar"),

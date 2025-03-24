@@ -43,11 +43,11 @@ def run_experiment(args, run_folder, coords_for_eval, nn_lengths_for_eval):
         # Load specific TSP instance
         logging.info(f"Loading TSP instance from: {args.tsp_instance}")
         tsp_instance = os.path.join(args.base_folder, args.tsp_instance)
-        init_coords, best_tour_length = load_tsp_instance(tsp_instance)
+        init_coords, best_tour_length, edge_weight_type = load_tsp_instance(tsp_instance)
         num_nodes = len(init_coords)
 
         # Create game with explicit node_type
-        game = TSPGame(num_nodes, init_coords, node_type="tsplib", args=args)
+        game = TSPGame(num_nodes, init_coords, node_type=edge_weight_type, args=args)
     else:
         # Use random coordinates
         init_coords = np.random.rand(num_nodes, 2).tolist()
@@ -124,9 +124,10 @@ def main():
             #####################################
             # Basic Configuration
             #####################################
+            "configuration name": "standard",
             "base_folder": ".",  # "/home/swaminathanj/jayadev_tsp/alpha_tsp/" or "."
             # TSP Instance Settings
-            "tsp_instance": "tsplib/burma14.tsp",  # None,  # Set to path like "tsplib/burma14.tsp" or None for random
+            "tsp_instance": "tsplib/eil51.tsp",  # None,  # Set to path like "tsplib/burma14.tsp" or None for random
             "num_nodes": 5,  # Only used if tsp_instance is None
             #####################################
             # Neural Network Architecture
@@ -208,6 +209,7 @@ def main():
     # Preset configurations for different scenarios
     preset_configs = {
         "light": {  # Fast training, smaller network
+            "configuration name": "light",
             "num_channels": 128,
             "num_layers": 4,
             "embedding_dim": 64,
@@ -220,6 +222,7 @@ def main():
             "readout_dim": 128,
         },
         "medium": {  # Balanced performance/speed
+            "configuration name": "medium",
             "num_channels": 256,
             "num_layers": 8,
             "embedding_dim": 128,
@@ -232,6 +235,7 @@ def main():
             "readout_dim": 256,
         },
         "heavy": {  # Best performance, slower training
+            "configuration name": "heavy",
             "num_channels": 512,
             "num_layers": 12,
             "embedding_dim": 256,
@@ -280,7 +284,7 @@ def main():
                 **preset_configs["light"],
                 "numMCTSSims": 25,
                 "numMCTSSimsEval": 25,
-                "numEps": 100,
+                "numEps": 5,
             },
         ),
         # (
@@ -388,7 +392,7 @@ def main():
     if base_args.tsp_instance:
         # Use the specific TSP instance for evaluation
         tsp_instance = os.path.join(base_args.base_folder, base_args.tsp_instance)
-        instance_coords, _ = load_tsp_instance(tsp_instance)
+        instance_coords, _, _ = load_tsp_instance(tsp_instance)
 
         # Ensure instance_coords is properly formatted
         if instance_coords and all(

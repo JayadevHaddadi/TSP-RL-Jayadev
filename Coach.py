@@ -82,10 +82,15 @@ class Coach:
         self.best_eval_lengths = (
             [float("inf")] * len(self.coords_for_eval) if self.coords_for_eval else []
         )
-        
+
+        # Add tracking for best tour found during any episode
+        self.best_episode_tour_length = float("inf")
+        self.best_episode_tour_iteration = None
+        self.best_episode_tour_episode = None
+        self.best_episode_tour_history = []  # For plotting progress over time
+
         # Optionally run a pre-training eval
         self.preTrainingEval()
-
 
     ###############################################################################
     # 1) Updated 'preTrainingEval' method to match the same folder structure
@@ -211,6 +216,30 @@ class Coach:
         for st, pi in trajectory:
             leftover = final_len - st.current_length
             examples.append((st, pi, leftover))
+
+        # Check if this is the best tour found in any episode
+        current_iteration = len(self.iteration_pi_loss_history) + 1  # Current iteration
+        current_episode = (
+            len(self.trainExamplesHistory[-1]) if self.trainExamplesHistory else 0
+        )  # Current episode in this iteration
+
+        if final_len < self.best_episode_tour_length:
+            # We found a new best tour!
+            log.info(
+                f"New best episode tour: {final_len:.4f} (previous: {self.best_episode_tour_length:.4f})"
+            )
+
+            # Update best tour information
+            self.best_episode_tour_length = final_len
+            self.best_episode_tour_iteration = current_iteration
+            self.best_episode_tour_episode = current_episode
+
+            # Save the tour image
+            self.save_best_episode_tour(state, current_iteration, current_episode)
+
+        # Track best episode tour length for plotting
+        if len(self.best_episode_tour_history) < current_iteration:
+            self.best_episode_tour_history.append(self.best_episode_tour_length)
 
         # Optionally log stats about this episode
         if hasattr(self.mcts, "total_searches"):
@@ -799,30 +828,38 @@ class Coach:
         axL.plot(
             iters,
             self.eval_avg_length_history,
-            label="Current Length",
+            label="Evaluation Length",
             color="blue",
             linewidth=2,
         )
 
-        # Mark accepted and rejected iterations
-        for i in self.accepted_iterations:
-            if i <= len(self.eval_avg_length_history):
-                axL.scatter(
-                    i,
-                    self.eval_avg_length_history[i - 1],
-                    color="green",
-                    marker="^",
-                    s=80,
+        # Add best episode tour length as a separate line if we have history
+        if self.best_episode_tour_history:
+            # Make sure the history matches the number of iterations
+            while len(self.best_episode_tour_history) < len(iters):
+                self.best_episode_tour_history.append(
+                    self.best_episode_tour_history[-1]
                 )
 
-        for i in self.rejected_iterations:
-            if i <= len(self.eval_avg_length_history):
+            axL.plot(
+                iters,
+                self.best_episode_tour_history,
+                label="Best Episode Tour",
+                color="green",
+                linewidth=1.5,
+                linestyle="--",
+            )
+
+            # Add a marker for the current best episode tour
+            if self.best_episode_tour_iteration is not None:
                 axL.scatter(
-                    i,
-                    self.eval_avg_length_history[i - 1],
-                    color="red",
-                    marker="x",
-                    s=80,
+                    self.best_episode_tour_iteration,
+                    self.best_episode_tour_length,
+                    color="green",
+                    marker="*",
+                    s=120,
+                    zorder=10,
+                    label=f"Best Episode ({self.best_episode_tour_length:.1f})",
                 )
 
         # Add horizontal line for the optimal solution length if available
@@ -894,12 +931,18 @@ class Coach:
 
         ax2.legend(loc="upper right")
 
-        # Add current performance to title
+        # Update the title to include both eval and best episode lengths
         if self.best_tour_length is not None:
-            gap = ((eval_len - self.best_tour_length) / self.best_tour_length) * 100
-            title = f"Iter {iteration}: Length={eval_len:.1f} (Gap: {gap:.1f}%)"
+            eval_gap = (
+                (eval_len - self.best_tour_length) / self.best_tour_length
+            ) * 100
+            ep_gap = (
+                (self.best_episode_tour_length - self.best_tour_length)
+                / self.best_tour_length
+            ) * 100
+            title = f"Iter {iteration}: Eval={eval_len:.1f} (Gap: {eval_gap:.1f}%), Best Episode={self.best_episode_tour_length:.1f} (Gap: {ep_gap:.1f}%)"
         else:
-            title = f"Iter {iteration}: Length={eval_len:.1f}"
+            title = f"Iter {iteration}: Eval={eval_len:.1f}, Best Episode={self.best_episode_tour_length:.1f}"
 
         fig.suptitle(title, fontsize=14)
         fig.tight_layout()
@@ -993,3 +1036,23 @@ class Coach:
         filename = os.path.join(folder, "checkpoint.examples")
         with open(filename, "wb") as f:
             Pickler(f).dump(self.trainExamplesHistory)
+
+    def save_best_episode_tour(self, state, iteration, episode):
+        """
+        Save the best tour found during any episode to the tours folder.
+        """
+        tours_folder = os.path.join(self.folder, "tours")
+        os.makedirs(tours_folder, exist_ok=True)
+
+        # Format the filename according to the requested pattern
+        filename = f"iter_{iteration:03d}_episode_{episode}_len_{self.best_episode_tour_length:.4f}.png"
+        out_path = os.path.join(tours_folder, filename)
+
+        # Plot and save the tour
+        self.game.plotTour(
+            state,
+            title=f"Best Tour (Iter={iteration}, Ep={episode}, Len={self.best_episode_tour_length:.4f})",
+            save_path=out_path,
+        )
+
+        log.info(f"Saved best episode tour image: {filename}")

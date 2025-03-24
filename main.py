@@ -280,7 +280,7 @@ def main():
                 **preset_configs["light"],
                 "numMCTSSims": 25,
                 "numMCTSSimsEval": 25,
-                "numEps": 5,
+                "numEps": 100,
             },
         ),
         # (

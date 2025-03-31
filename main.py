@@ -44,6 +44,9 @@ def run_experiment(args, run_folder, coords_for_eval, nn_lengths_for_eval):
         logging.info(f"Loading TSP instance from: {args.tsp_instance}")
         tsp_instance = os.path.join(args.base_folder, args.tsp_instance)
         init_coords, best_tour_length, edge_weight_type = load_tsp_instance(tsp_instance)
+        init_coords, best_tour_length, edge_weight_type = load_tsp_instance(
+            tsp_instance
+        )
         num_nodes = len(init_coords)
 
         # Create game with explicit node_type
@@ -125,9 +128,10 @@ def main():
             # Basic Configuration
             #####################################
             "configuration name": "standard",
+            "explicit_prints": False,
             "base_folder": ".",  # "/home/swaminathanj/jayadev_tsp/alpha_tsp/" or "."
             # TSP Instance Settings
-            "tsp_instance": "tsplib/eil51.tsp",  # None,  # Set to path like "tsplib/burma14.tsp" or None for random
+            "tsp_instance": "tsplib/burma14.tsp",  # None,  # Set to path like "tsplib/burma14.tsp" or None for random
             "num_nodes": 5,  # Only used if tsp_instance is None
             #####################################
             # Neural Network Architecture
@@ -201,8 +205,15 @@ def main():
             "cuda": torch.cuda.is_available(),
             "visualize": True,
             "load_model": False,  # Set True to load a pre-trained model
+            # "load_folder_file": [
+            #     "for analysis",
+            #     "best EIL51 6 procent off sol.tar",
+            # ],
             "fixed_start": True,  # Set to False for random starts
             "fixed_start_node": 0,  # Which node to use when fixed_start=True
+            "num_workers": 4,  # Number of parallel self-play workers
+            "buffer_size": 200000,  # Replay buffer size
+            "checkpoint_interval": 5,  # How often to evaluate and save
         }
     )
 
@@ -252,12 +263,13 @@ def main():
     # Example of using a preset configuration:
     arch_list = [
         # (
-        #     "medium",  # Name of the experiment
+        #     "light mcts 50 eps 10",  # Name of the experiment
         #     {
-        #         **preset_configs["medium"],
-        #         # "numMCTSSims": 25,
-        #         # "numMCTSSimsEval": 25,
-        #         "numEps": 50,
+        #         **preset_configs["light"],
+        #         "tsp_instance": "tsplib/eil51.tsp",
+        #         "numMCTSSims": 50,
+        #         "numMCTSSimsEval": 50,
+        #         "numEps": 10,
         #     },
         # ),
         # (
@@ -279,14 +291,37 @@ def main():
         #     },
         # ),
         (
-            "light",  # Name of the experiment
+            "Loading eil51 6 procent off sol",  # Name of the experiment
             {
                 **preset_configs["light"],
+                "cuda": False,
+                # "tsp_instance": "tsplib/eil51.tsp",
                 "numMCTSSims": 25,
-                "numMCTSSimsEval": 25,
-                "numEps": 5,
+                "numMCTSSimsEval": 50,
+                "numEps": 1,
             },
         ),
+        # (
+        #     "light mcts 25-100 eps 5, NO gpu",  # Name of the experiment
+        #     {
+        #         **preset_configs["light"],
+        #         "cuda": False,
+        #         "tsp_instance": "tsplib/burma14.tsp",
+        #         "numMCTSSims": 25,
+        #         "numMCTSSimsEval": 100,
+        #         "numEps": 5,
+        #     },
+        # ),
+        # (
+        #     "medium mcts 50 eps 10",  # Name of the experiment
+        #     {
+        #         **preset_configs["medium"],
+        #         "tsp_instance": "tsplib/burma14.tsp",
+        #         "numMCTSSims": 50,
+        #         "numMCTSSimsEval": 50,
+        #         "numEps": 10,
+        #     },
+        # ),
         # (
         #     "heavy",  # Name of the experiment
         #     {

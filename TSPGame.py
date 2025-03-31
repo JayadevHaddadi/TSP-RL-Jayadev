@@ -2,7 +2,6 @@ import sys
 import copy
 import numpy as np
 import matplotlib.pyplot as plt
-import random
 import math
 
 sys.path.append("..")

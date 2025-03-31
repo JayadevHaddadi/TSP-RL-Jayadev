@@ -36,31 +36,53 @@ class MCTS:
         self.tree_depth = 0
 
     def getActionProb(self, state, temp=1):
-        uniqueString = self.game.uniqueStringRepresentation(state)
+        if self.args.explicit_prints:
+            print("\n=== Getting action probabilities ===")
+            print(f"Temperature: {temp}")
 
-        # Run simulations to build the search tree
-        for _ in range(self.args.numMCTSSims):
-            self.search(state, uniqueString)  # Pass the precomputed string
-            self.total_searches += 1
+        for i in range(self.args.numMCTSSims):
+            if self.args.explicit_prints:
+                print(f"\nStarting simulation {i+1}/{self.args.numMCTSSims}")
+            self.search(state)
 
+        s = self.game.uniqueStringRepresentation(state)
         counts = [
-            self.Nsa[(uniqueString, a)] if (uniqueString, a) in self.Nsa else 0
+            self.Nsa[(s, a)] if (s, a) in self.Nsa else 0
             for a in range(self.game.getActionSize())
         ]
 
+        if self.args.explicit_prints:
+            print("\nVisit counts for each action:")
+            for a, count in enumerate(counts):
+                if count > 0:
+                    print(f"Action {a}: {count} visits")
+
         if temp == 0:
-            bestAs = np.argwhere(counts == np.max(counts)).flatten()
+            bestAs = np.array(np.argwhere(counts == np.max(counts))).flatten()
             bestA = np.random.choice(bestAs)
             probs = [0] * len(counts)
             probs[bestA] = 1
+            if self.args.explicit_prints:
+                print(f"\nTemp=0: Selecting best action {bestA}")
         else:
-            counts_exp = [x ** (1.0 / temp) for x in counts]
-            counts_sum = float(sum(counts_exp))
-            probs = [x / counts_sum for x in counts_exp]
+            counts = [x ** (1.0 / temp) for x in counts]
+            counts_sum = float(sum(counts))
+            probs = [x / counts_sum for x in counts]
+            if self.args.explicit_prints:
+                print("\nAction probabilities:")
+                for a, prob in enumerate(probs):
+                    if prob > 0:
+                        print(f"Action {a}: {prob:.3f}")
 
         return probs
 
     def search(self, tsp_state: TSPState, state_str=None):
+        if self.args.explicit_prints:
+            print("\n=== Starting new MCTS search ===")
+            print(
+                f"Current board state: {self.game.uniqueStringRepresentation(tsp_state)}"
+            )
+
         state_string = (
             state_str
             if state_str is not None
@@ -70,15 +92,20 @@ class MCTS:
         if state_string not in self.Es:
             if self.game.isTerminal(tsp_state):  # Terminal
                 self.Es[state_string] = self.game.getFinalScore(tsp_state)
+                if self.args.explicit_prints:
+                    print(f"Game ended with value: {self.Es[state_string]}")
                 return self.Es[state_string]
             else:
                 self.Es[state_string] = None  # Not terminal
         if self.Es[state_string] != None:
             # terminal node
+            if self.args.explicit_prints:
+                print(f"Game ended with value: {self.Es[state_string]}")
             return self.Es[state_string]
 
         if state_string not in self.Ps:
-            # Leaf node
+            if self.args.explicit_prints:
+                print("\nNew state encountered - getting policy from neural network")
             if state_string in self.Pred_cache:
                 self.Ps[state_string], leftover_v = self.Pred_cache[state_string]
                 self.cache_hits += 1
@@ -95,13 +122,23 @@ class MCTS:
             if sum_Ps_s > 0:
                 self.Ps[state_string] /= sum_Ps_s
             else:
-                print(self.Ps[state_string])
-                log.error("All valid moves were masked, assigning equal probabilities.")
+                if self.args.explicit_prints:
+                    print("All valid moves were masked, defaulting to uniform policy")
                 self.Ps[state_string] = self.Ps[state_string] + valids
                 self.Ps[state_string] /= np.sum(self.Ps[state_string])
 
             self.Vs[state_string] = valids
             self.Ns[state_string] = 0
+            if self.args.explicit_prints:
+                print(f"Neural network value prediction: {v}")
+                print(
+                    "Policy probabilities:",
+                    {
+                        i: f"{p:.3f}"
+                        for i, p in enumerate(self.Ps[state_string])
+                        if p > 0
+                    },
+                )
             return v
 
         # Internal Node
@@ -109,7 +146,9 @@ class MCTS:
         cur_best = -float("inf")
         best_act = -1
 
-        # UCB
+        if self.args.explicit_prints:
+            print("\nEvaluating moves:")
+
         for a in range(self.game.getActionSize()):
             if valids[a]:
                 if (state_string, a) in self.Qsa:
@@ -124,43 +163,37 @@ class MCTS:
                         * self.Ps[state_string][a]
                         * math.sqrt(self.Ns[state_string] + EPS)
                     )
+
+                if self.args.explicit_prints:
+                    print(f"\nAction {a}:")
+                    print(f"  Q-value: {self.Qsa.get((state_string, a), 0):.3f}")
+                    print(f"  Prior P: {self.Ps[state_string][a]:.3f}")
+                    print(f"  Visit count: {self.Nsa.get((state_string, a), 0)}")
+                    print(f"  PUCT value: {u:.3f}")
+
                 if u > cur_best:
                     cur_best = u
                     best_act = a
+                    if self.args.explicit_prints:
+                        print(f"  -> New best action!")
 
         a = best_act
+        if self.args.explicit_prints:
+            print(f"\nSelected action: {a} with PUCT value: {cur_best:.3f}")
+
         next_s = self.game.getNextState(tsp_state, a)
-        # Do best expected action
         v = self.search(next_s)
 
-        # Update Q, N - Avarage of old Qsa and new v
         if (state_string, a) in self.Qsa:
-            # Keep maximum value for deterministic environments
-            self.Qsa[(state_string, a)] = max(self.Qsa[(state_string, a)], v)
             self.Nsa[(state_string, a)] += 1
         else:
             self.Qsa[(state_string, a)] = v
             self.Nsa[(state_string, a)] = 1
 
         self.Ns[state_string] += 1
+        if self.args.explicit_prints:
+            print(f"\nBackpropagating value: {v}")
+            print(f"Updated Q-value for (s,a): {self.Qsa[(state_string, a)]:.3f}")
+            print(f"Updated visit count for (s,a): {self.Nsa[(state_string, a)]}")
+            print(f"Updated visit count for state: {self.Ns[state_string]}")
         return v
-
-    def simulate(self, state):
-        # ... existing simulation code ...
-        if random.random() < 0.2:  # 20% chance to apply local search
-            improved_state = self.two_opt_improvement(state)
-            return improved_state.current_length
-
-    def two_opt_improvement(self, state):
-        best = state.current_length
-        improved = True
-        while improved:
-            improved = False
-            for i in range(len(state.tour) - 1):
-                for j in range(i + 2, len(state.tour)):
-                    # Try 2-opt swap
-                    new_length = self.calculate_swap(state, i, j)
-                    if new_length < best:
-                        best = new_length
-                        improved = True
-        return state

@@ -43,7 +43,6 @@ def run_experiment(args, run_folder, coords_for_eval, nn_lengths_for_eval):
         # Load specific TSP instance
         logging.info(f"Loading TSP instance from: {args.tsp_instance}")
         tsp_instance = os.path.join(args.base_folder, args.tsp_instance)
-        init_coords, best_tour_length, edge_weight_type = load_tsp_instance(tsp_instance)
         init_coords, best_tour_length, edge_weight_type = load_tsp_instance(
             tsp_instance
         )
@@ -121,6 +120,48 @@ def main():
     Main function with direct parameter configuration.
     Edit the parameters below to configure your experiment.
     """
+    # Preset configurations for different scenarios
+    preset_configs = {
+        "light": {  # Fast training, smaller network
+            "configuration name": "light",
+            "num_channels": 128,
+            "num_layers": 4,
+            "embedding_dim": 64,
+            "hidden_dim": 128,
+            "heads": 4,
+            "dropout": 0.1,
+            "policy_layers": 1,
+            "value_layers": 1,
+            "edge_dim": 32,
+            "readout_dim": 128,
+        },
+        "medium": {  # Balanced performance/speed
+            "configuration name": "medium",
+            "num_channels": 256,
+            "num_layers": 8,
+            "embedding_dim": 128,
+            "hidden_dim": 256,
+            "heads": 8,
+            "dropout": 0.1,
+            "policy_layers": 2,
+            "value_layers": 2,
+            "edge_dim": 64,
+            "readout_dim": 256,
+        },
+        "heavy": {  # Best performance, slower training
+            "configuration name": "heavy",
+            "num_channels": 512,
+            "num_layers": 12,
+            "embedding_dim": 256,
+            "hidden_dim": 512,
+            "heads": 16,
+            "dropout": 0.2,
+            "policy_layers": 3,
+            "value_layers": 3,
+            "edge_dim": 128,
+            "readout_dim": 512,
+        },
+    }
     # Direct assignment of configuration values to base_args
     base_args = dotdict(
         {
@@ -128,7 +169,7 @@ def main():
             # Basic Configuration
             #####################################
             "configuration name": "standard",
-            "explicit_prints": False,
+            "explicit_prints": True,
             "base_folder": ".",  # "/home/swaminathanj/jayadev_tsp/alpha_tsp/" or "."
             # TSP Instance Settings
             "tsp_instance": "tsplib/burma14.tsp",  # None,  # Set to path like "tsplib/burma14.tsp" or None for random
@@ -204,11 +245,11 @@ def main():
             # System
             "cuda": torch.cuda.is_available(),
             "visualize": True,
-            "load_model": False,  # Set True to load a pre-trained model
-            # "load_folder_file": [
-            #     "for analysis",
-            #     "best EIL51 6 procent off sol.tar",
-            # ],
+            "load_model": True,  # Set True to load a pre-trained model
+            "load_folder_file": [
+                "for analysis",
+                "best burma14 light.pth.tar", #best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
+            ],
             "fixed_start": True,  # Set to False for random starts
             "fixed_start_node": 0,  # Which node to use when fixed_start=True
             "num_workers": 4,  # Number of parallel self-play workers
@@ -217,88 +258,25 @@ def main():
         }
     )
 
-    # Preset configurations for different scenarios
-    preset_configs = {
-        "light": {  # Fast training, smaller network
-            "configuration name": "light",
-            "num_channels": 128,
-            "num_layers": 4,
-            "embedding_dim": 64,
-            "hidden_dim": 128,
-            "heads": 4,
-            "dropout": 0.1,
-            "policy_layers": 1,
-            "value_layers": 1,
-            "edge_dim": 32,
-            "readout_dim": 128,
-        },
-        "medium": {  # Balanced performance/speed
-            "configuration name": "medium",
-            "num_channels": 256,
-            "num_layers": 8,
-            "embedding_dim": 128,
-            "hidden_dim": 256,
-            "heads": 8,
-            "dropout": 0.1,
-            "policy_layers": 2,
-            "value_layers": 2,
-            "edge_dim": 64,
-            "readout_dim": 256,
-        },
-        "heavy": {  # Best performance, slower training
-            "configuration name": "heavy",
-            "num_channels": 512,
-            "num_layers": 12,
-            "embedding_dim": 256,
-            "hidden_dim": 512,
-            "heads": 16,
-            "dropout": 0.2,
-            "policy_layers": 3,
-            "value_layers": 3,
-            "edge_dim": 128,
-            "readout_dim": 512,
-        },
-    }
-
     # Example of using a preset configuration:
     arch_list = [
-        # (
-        #     "light mcts 50 eps 10",  # Name of the experiment
-        #     {
-        #         **preset_configs["light"],
-        #         "tsp_instance": "tsplib/eil51.tsp",
-        #         "numMCTSSims": 50,
-        #         "numMCTSSimsEval": 50,
-        #         "numEps": 10,
-        #     },
-        # ),
-        # (
-        #     "medium",  # Name of the experiment
-        #     {
-        #         **preset_configs["medium"],
-        #         "numMCTSSims": 50,
-        #         "numMCTSSimsEval": 50,
-        #         "numEps": 10,
-        #     },
-        # ),
-        # (
-        #     "light_more_mcts",  # Name of the experiment
-        #     {
-        #         **preset_configs["light"],
-        #         "numMCTSSims": 100,
-        #         "numMCTSSimsEval": 150,
-        #         "numEps": 10,
-        #     },
-        # ),
         (
-            "Loading eil51 6 procent off sol",  # Name of the experiment
+            "trasformer best",  # Name of the experiment
             {
                 **preset_configs["light"],
                 "cuda": False,
+                # "architecture": "transformer_deepseek", #transformer_deepseek, pointer
                 # "tsp_instance": "tsplib/eil51.tsp",
-                "numMCTSSims": 25,
-                "numMCTSSimsEval": 50,
-                "numEps": 1,
+                "explicit_prints": False,
+                "numMCTSSims": 15,
+                "numMCTSSimsEval": 15,
+                "load_model": False,
+                "load_folder_file": [
+                "for analysis",
+                "best burma14 light.pth.tar", #best transformer.tar,best pointer.tar,best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
+                ],
+                "numEps": 5,
+                "epochs": 5, 
             },
         ),
         # (

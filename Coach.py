@@ -43,7 +43,7 @@ class Coach:
 
         # Possibly known best from TSPLIB
         self.best_tour_length = best_tour_length
-        print(f"Best tour length: {self.best_tour_length}")
+        log.info(f"Best tour length: {self.best_tour_length}")
 
         # For stable evaluation
         self.coords_for_eval = coords_for_eval or []

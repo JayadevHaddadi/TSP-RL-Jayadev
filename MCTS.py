@@ -131,7 +131,8 @@ class MCTS:
             self.Vs[state_string] = valids
             self.Ns[state_string] = 0
             if self.args.explicit_prints:
-                log.info(f"Neural network value prediction: {v}")
+                log.info(f"NN Predicted Remaining Cost: {leftover_v:.3f}")
+                log.info(f"Estimated Total Cost (v): {(total_cost):.3f}")
                 log.info(
                     "Policy probabilities:",
                     {
@@ -148,10 +149,11 @@ class MCTS:
         best_act = -1
 
         if self.args.explicit_prints:
-            log.info("Evaluating moves:")
+            log.info(f"Evaluating moves for state {state_string} with Ns(s): {self.Ns[state_string]} visits:")
 
         for a in range(self.game.getActionSize()):
             if valids[a]:
+                discount = 1
                 if (state_string, a) in self.Qsa:
                     u = self.Qsa[(state_string, a)] + (self.args.cpuct * self.Ps[state_string][a] * 
                                                        math.sqrt(self.Ns[state_string]) / (
@@ -165,11 +167,9 @@ class MCTS:
                     )
 
                 if self.args.explicit_prints:
-                    log.info(f"Action {a}:")
-                    log.info(f"  Q-value: {self.Qsa.get((state_string, a), 0):.3f}")
-                    log.info(f"  Prior P: {self.Ps[state_string][a]:.3f}")
-                    log.info(f"  Visit count: {self.Nsa.get((state_string, a), 0)}")
-                    log.info(f"  PUCT value: {u:.3f}")
+                    log.info(
+                        f" Action {a}: Q-value: {self.Qsa.get((state_string, a), 0)}, Nsa(s,a): {self.Nsa.get((state_string, a), 0)}, Prior P: {self.Ps[state_string][a]:.3f}, discount: {discount:.3f}, Selection Score (u): {u:.3f}"
+                    )
 
                 if u > cur_best:
                     cur_best = u

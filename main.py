@@ -261,18 +261,19 @@ def main():
     # Example of using a preset configuration:
     arch_list = [
         (
-            "trasformer best",  # Name of the experiment
+            "testing new MCTS",  # Name of the experiment
             {
                 **preset_configs["light"],
                 "cuda": False,
                 # "architecture": "transformer_deepseek", #transformer_deepseek, pointer
                 # "tsp_instance": "tsplib/eil51.tsp",
-                "explicit_prints": False,
-                "numMCTSSims": 15,
-                "numMCTSSimsEval": 15,
-                "load_model": False,
+                "cpuct": 5.0,
+                "explicit_prints": True,
+                "numMCTSSims": 25,
+                "numMCTSSimsEval": 25,
+                "load_model": True,
                 "load_folder_file": [
-                "for analysis",
+                "for analysis", #for analysis,runs/250404-144225_burma14_testing new MCTS/checkpoints
                 "best burma14 light.pth.tar", #best transformer.tar,best pointer.tar,best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
                 ],
                 "numEps": 5,

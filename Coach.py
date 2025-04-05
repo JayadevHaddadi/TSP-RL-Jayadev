@@ -250,6 +250,9 @@ class Coach:
         return examples
 
     def learn(self):
+        # Initialize a counter for iterations with no improvement.
+        self.no_improve_counter = 0
+
         # Initialize the champion network - use the same configuration as self.nnet
         # Create a new instance instead of deepcopy to avoid copy issues
         self.champion_nnet = type(self.nnet)(self.game, self.args)
@@ -437,6 +440,22 @@ class Coach:
             self.plot_loss_and_length_history(i, self.eval_avg_length_history[-1])
             # Also plot acceptance/rejection history
             # self.plot_acceptance_history(i)
+
+            # Assume you compute a variable 'current_best_tour_length' from evaluation of the iteration.
+            # Lower tour length means improvement (minimization) or if you work with negative cost, then higher is better.
+            # Adjust the check below based on your definitions.
+            if challenger_avg_len < self.best_tour_length:
+                self.best_tour_length = challenger_avg_len
+                self.no_improve_counter = 0
+            else:
+                self.no_improve_counter += 1
+
+            if self.no_improve_counter >= self.args.no_improvement_threshold:
+                self.args.cpuct *= self.args.cpuct_update_factor
+                print(
+                    f"Adaptive cpuct triggered at iteration {i}: cpuct increased to {self.args.cpuct}"
+                )
+                self.no_improve_counter = 0
 
     def augmentExamples(self, original_data):
         """
@@ -832,7 +851,7 @@ class Coach:
             color="blue",
             linewidth=2,
         )
-        
+
         # Mark accepted and (NOT rejected iterations)
         for i in self.accepted_iterations:
             if i <= len(self.eval_avg_length_history):

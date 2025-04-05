@@ -237,6 +237,8 @@ def main():
             "numMCTSSimsEval": 50,  # Number of MCTS simulations during evaluation
             "maxlenOfQueue": 200000,  # Maximum length of the queue
             "cpuct": 1.0,  # Exploration constant in MCTS
+            "no_improvement_threshold": 3,
+            "cpuct_update_factor": 1.2,
             # Training History
             "numItersForTrainExamplesHistory": 20,
             "augmentationFactor": 1,  # Data augmentation factor
@@ -256,6 +258,8 @@ def main():
             "num_workers": 4,  # Number of parallel self-play workers
             "buffer_size": 200000,  # Replay buffer size
             "checkpoint_interval": 5,  # How often to evaluate and save
+
+        
         }
     )
 
@@ -283,9 +287,9 @@ def main():
             "architecture": "gcn",  # Options: "gcn", "pointer"
             "explicit_prints": False,
             "load_model": False,
-            "numMCTSSims": 100,
-            "numMCTSSimsEval": 100,
-            "numEps": 1,
+            "numMCTSSims": 25,
+            "numMCTSSimsEval": 50,
+            "numEps": 5,
             "cpuct": 1,
             },
         ),

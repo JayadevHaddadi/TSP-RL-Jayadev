@@ -160,23 +160,23 @@ class MCTS:
                 discount = 1
                 q_value = self.Qsa.get((state_string, a), 0)
                 if (state_string, a) in self.Qsa:
-                    # discount = (-0.01
-                    #     * (
-                    #         self.args.cpuct
-                    #         * self.Ns[state_string]
-                    #         ** (1 / (1 + self.Nsa[(state_string, a)]))
-                    #     )+ 1)
-                    # u = q_value * (
-                    #     discount
-                    #     - self.Ps[state_string][a]
-                    # )
-
-                    u = q_value + (
-                        self.args.cpuct
-                        * self.Ps[state_string][a]
-                        * math.sqrt(self.Ns[state_string])
-                        / (1 + self.Nsa[(state_string, a)])
+                    discount = (-0.01
+                        * (
+                            self.args.cpuct
+                            * self.Ns[state_string]
+                            ** (1 / (1 + self.Nsa[(state_string, a)]))
+                        )+ 1)
+                    u = q_value * (
+                        discount
+                        # - self.Ps[state_string][a]
                     )
+
+                    # u = q_value + (
+                    #     self.args.cpuct
+                    #     * self.Ps[state_string][a]
+                    #     * math.sqrt(self.Ns[state_string])
+                    #     / (1 + self.Nsa[(state_string, a)])
+                    # )
                 else:
                     u = (
                         self.args.cpuct
@@ -186,7 +186,7 @@ class MCTS:
 
                 if self.args.explicit_prints:
                     log.info(
-                        f" Action {a}: Q-value: {q_value}, Nsa(s,a): {self.Nsa.get((state_string, a), 0)}, Prior P: {self.Ps[state_string][a]:.3f}, discount: {discount:.3f}, Selection Score (u): {u:.3f}"
+                        f" Action {a}: Q-value: {q_value:.3f}, Nsa(s,a): {self.Nsa.get((state_string, a), 0)}, Prior P: {self.Ps[state_string][a]:.3f}, discount: {discount:.3f}, Selection Score (u): {u:.3f}"
                     )
 
                 if u > cur_best:

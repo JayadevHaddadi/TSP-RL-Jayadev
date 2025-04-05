@@ -169,7 +169,7 @@ def main():
             # Basic Configuration
             #####################################
             "configuration name": "standard",
-            "explicit_prints": False,
+            "explicit_prints": True,
             "base_folder": ".",  # "/home/swaminathanj/jayadev_tsp/alpha_tsp/" or "."
             # TSP Instance Settings
             "tsp_instance": "tsplib/burma14.tsp",  # None,  # Set to path like "tsplib/burma14.tsp" or None for random
@@ -246,7 +246,7 @@ def main():
             # System
             "cuda": torch.cuda.is_available(),
             "visualize": True,
-            "load_model": True,  # Set True to load a pre-trained model
+            "load_model": False,  # Set True to load a pre-trained model
             "load_folder_file": [
                 "for analysis",
                 "best burma14 light.pth.tar", #best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
@@ -261,34 +261,60 @@ def main():
 
     # Example of using a preset configuration:
     arch_list = [
+        # (
+        #     "normal javadev mcts CPUCT 0",  # Name of the experiment
+        #     {
+        #     "explicit_prints": False,
+        #     "load_model": False, 
+        #     "cpuct": 0,
+        #     },
+        # ),
+        # (
+        #     "normal javadev mcts CPUCT 1",  # Name of the experiment
+        #     {
+        #     "explicit_prints": False,
+        #     "load_model": False, 
+        #     "cpuct": 1.0,
+        #     },
+        # ),
         (
-            "lr 0.1 dropout 0",  # Name of the experiment
+            "pointer CPUCT 5",  # Name of the experiment
             {
-                "learning_rate": 0.1,
-                "dropout": 0.0,
+            "architecture": "pointer",  # Options: "gcn", "pointer"
+            "explicit_prints": False,
+            "load_model": False, 
+            "cpuct": 5,
             },
         ),
-        (
-            "lr 0.01 dropout 0",  # Name of the experiment
-            {
-                "learning_rate": 0.01,
-                "dropout": 0.0,
-            },
-        ),
-        (
-            "lr 0.01 dropout 0.1",  # Name of the experiment
-            {
-                "learning_rate": 0.01,
-                "dropout": 0.1,
-            },
-        ),
-        (
-            "lr 0.1 dropout 0.1",  # Name of the experiment
-            {
-                "learning_rate": 0.1,
-                "dropout": 0.1,
-            },
-        ),
+        # (
+        #     "normal javadev mcts CPUCT 10",  # Name of the experiment
+        #     {
+        #     "explicit_prints": False,
+        #     "load_model": False, 
+        #     "cpuct": 10,
+        #     },
+        # ),
+        # (
+        #     "lr 0.01 dropout 0",  # Name of the experiment
+        #     {
+        #         "learning_rate": 0.01,
+        #         "dropout": 0.0,
+        #     },
+        # ),
+        # (
+        #     "lr 0.01 dropout 0.1",  # Name of the experiment
+        #     {
+        #         "learning_rate": 0.01,
+        #         "dropout": 0.1,
+        #     },
+        # ),
+        # (
+        #     "lr 0.1 dropout 0.1",  # Name of the experiment
+        #     {
+        #         "learning_rate": 0.1,
+        #         "dropout": 0.1,
+        #     },
+        # ),
        
         # (
         #     "light mcts 25-100 eps 5, NO gpu",  # Name of the experiment

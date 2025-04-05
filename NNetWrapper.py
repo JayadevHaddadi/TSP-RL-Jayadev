@@ -113,6 +113,9 @@ class NNetWrapper(NeuralNet):
 
     def train(self, examples):
         optimizer = optim.Adam(self.nnet.parameters(), lr=self.args.learning_rate)
+        scheduler = optim.lr_scheduler.StepLR(
+            optimizer, step_size=self.args.lr_step_size, gamma=self.args.lr_decay
+        )
 
         pi_loss_list = []
         v_loss_list = []
@@ -177,6 +180,8 @@ class NNetWrapper(NeuralNet):
 
             pi_loss_list.append(pi_losses.avg)
             v_loss_list.append(v_losses.avg)
+            scheduler.step()
+            print("Current LR:", scheduler.get_last_lr())
 
         return pi_loss_list[-1], v_loss_list[-1]
 

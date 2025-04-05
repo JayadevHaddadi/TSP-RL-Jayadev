@@ -158,26 +158,25 @@ class MCTS:
         for a in range(self.game.getActionSize()):
             if valids[a]:
                 discount = 1
-                q_value = 0
+                q_value = self.Qsa.get((state_string, a), 0)
                 if (state_string, a) in self.Qsa:
-                    q_value = self.Qsa[(state_string, a)]
-                    discount = (-0.01
-                        * (
-                            self.args.cpuct
-                            * self.Ns[state_string]
-                            ** (1 / (1 + self.Nsa[(state_string, a)]))
-                        )+ 1)
-                    u = q_value * (
-                        discount
-                        - self.Ps[state_string][a]
-                    )
-
-                    # u = self.Qsa[(state_string, a)] + (
-                    #     self.args.cpuct
-                    #     * self.Ps[state_string][a]
-                    #     * math.sqrt(self.Ns[state_string])
-                    #     / (1 + self.Nsa[(state_string, a)])
+                    # discount = (-0.01
+                    #     * (
+                    #         self.args.cpuct
+                    #         * self.Ns[state_string]
+                    #         ** (1 / (1 + self.Nsa[(state_string, a)]))
+                    #     )+ 1)
+                    # u = q_value * (
+                    #     discount
+                    #     - self.Ps[state_string][a]
                     # )
+
+                    u = q_value + (
+                        self.args.cpuct
+                        * self.Ps[state_string][a]
+                        * math.sqrt(self.Ns[state_string])
+                        / (1 + self.Nsa[(state_string, a)])
+                    )
                 else:
                     u = (
                         self.args.cpuct
@@ -205,10 +204,16 @@ class MCTS:
 
         if (state_string, a) in self.Qsa:
             # Average the new value v with the existing Q-value                    log.info("All valid moves were masked, defaulting to uniform policy")
-            self.Qsa[(state_string, a)] = max(self.Qsa[(state_string, a)], v)
-            # self.Qsa[(state_string, a)] = (
-            #     self.Nsa[(state_string, a)] * self.Qsa[(state_string, a)] + v
-            # ) / (self.Nsa[(state_string, a)] + 1)
+            # self.Qsa[(state_string, a)] = max(self.Qsa[(state_string, a)], v)
+            
+            # if we find a better value, we update the Q-value
+            # if we find a worse value, we save the avarge
+            if(self.Qsa[(state_string, a)]<v):
+                self.Qsa[(state_string, a)] = v
+            else:
+                self.Qsa[(state_string, a)] = (
+                    self.Nsa[(state_string, a)] * self.Qsa[(state_string, a)] + v
+                ) / (self.Nsa[(state_string, a)] + 1)
             self.Nsa[(state_string, a)] += 1
         else:
             self.Qsa[(state_string, a)] = v

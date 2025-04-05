@@ -169,7 +169,7 @@ def main():
             # Basic Configuration
             #####################################
             "configuration name": "standard",
-            "explicit_prints": True,
+            "explicit_prints": False,
             "base_folder": ".",  # "/home/swaminathanj/jayadev_tsp/alpha_tsp/" or "."
             # TSP Instance Settings
             "tsp_instance": "tsplib/burma14.tsp",  # None,  # Set to path like "tsplib/burma14.tsp" or None for random
@@ -179,12 +179,12 @@ def main():
             #####################################
             # Core Architecture
             "architecture": "gcn",  # Options: "gcn", "pointer", "transformer", "conformer"
-            "num_channels": 512,  # Width of network (64-1024). Larger = more expressive but slower
-            "num_layers": 8,  # Number of GCN layers (2-16). Deeper = larger receptive field
-            "embedding_dim": 128,  # Initial node embedding size (32-256)
-            "hidden_dim": 256,  # Hidden layer width (64-512)
+            "num_channels": 128,  # Width of network (64-1024). Larger = more expressive but slower
+            "num_layers": 4,  # Number of GCN layers (2-16). Deeper = larger receptive field
+            "embedding_dim": 64,  # Initial node embedding size (32-256)
+            "hidden_dim": 128,  # Hidden layer width (64-512)
             # Attention & Regularization
-            "heads": 8,  # Number of attention heads (4-16). More heads = finer-grained attention
+            "heads": 4,  # Number of attention heads (4-16). More heads = finer-grained attention
             "dropout": 0.1,  # Dropout rate (0.0-0.5). Higher = more regularization
             "activation": "relu",  # Activation function: 'relu', 'gelu', 'elu'
             # Architecture Components
@@ -196,44 +196,45 @@ def main():
             # Training Parameters
             #####################################
             # Optimization
-            "learning_rate": 0.001,  # Initial learning rate (1e-4 to 1e-2)
-            "lr_decay": 0.95,  # Learning rate decay factor (0.9-0.99)
+            "learning_rate": 0.01,  # Initial learning rate (1e-4 to 1e-2)
+            "lr_decay": 0.9,  # Learning rate decay factor (0.9-0.99)
+            "lr_step_size": 5, 
             "weight_decay": 1e-4,  # L2 regularization (1e-5 to 1e-3)
             "grad_clip": 5.0,  # Gradient clipping threshold
             "batch_norm": True,  # Use batch normalization
             "max_gradient_norm": 5.0,  # Maximum gradient norm for clipping
             # Training Loop
             "numIters": 1000,  # Number of training iterations
-            "numEps": 100,  # Episodes per iteration
-            "epochs": 10,  # Training epochs per iteration
+            "numEps": 5,  # Episodes per iteration
+            "epochs": 5,  # Training epochs per iteration
             "batch_size": 64,  # Batch size for training
             #####################################
             # Policy & Value Networks
             #####################################
             # Policy Head
-            "policy_layers": 2,  # Number of layers in policy head (1-3)
+            "policy_layers": 1,  # Number of layers in policy head (1-3)
             "policy_dim": 256,  # Policy head hidden dimension (64-512)
             # Value Head
-            "value_layers": 2,  # Number of layers in value head (1-3)
+            "value_layers": 1,  # Number of layers in value head (1-3)
             "value_dim": 256,  # Value head hidden dimension (64-512)
             #####################################
             # Advanced Architecture Options
             #####################################
             # Edge Features
             "use_edge_features": True,  # Whether to use edge features
-            "edge_dim": 64,  # Edge feature dimension (16-128)
+            "edge_dim": 32,  # Edge feature dimension (16-128)
             # Global Information
             "global_pool": "mean",  # Global pooling method: 'mean', 'sum', 'max'
             "readout_layers": 2,  # Number of layers in readout MLP
-            "readout_dim": 256,  # Readout hidden dimension
+            "readout_dim": 128,  # Readout hidden dimension
             # Initialization
             "init_type": "kaiming",  # Weight initialization: 'kaiming', 'xavier', 'orthogonal'
             "init_scale": 1.0,  # Scale factor for initialization
             #####################################
             # MCTS & Evaluation Parameters
             #####################################
-            "numMCTSSims": 100,  # Number of MCTS simulations during training
-            "numMCTSSimsEval": 150,  # Number of MCTS simulations during evaluation
+            "numMCTSSims": 25,  # Number of MCTS simulations during training
+            "numMCTSSimsEval": 50,  # Number of MCTS simulations during evaluation
             "maxlenOfQueue": 200000,  # Maximum length of the queue
             "cpuct": 1.0,  # Exploration constant in MCTS
             # Training History
@@ -261,85 +262,34 @@ def main():
     # Example of using a preset configuration:
     arch_list = [
         (
-            "cpuct 0",  # Name of the experiment
+            "lr 0.1 dropout 0",  # Name of the experiment
             {
-                **preset_configs["light"],
-                "cuda": False,
-                # "architecture": "transformer_deepseek", #transformer_deepseek, pointer
-                # "tsp_instance": "tsplib/eil51.tsp",
-                "cpuct": 0.0,
-                "explicit_prints": False,
-                "numMCTSSims": 25,
-                "numMCTSSimsEval": 25,
-                "load_model": False,
-                "load_folder_file": [
-                "runs/250405-112228_burma14_testing new MCTS/checkpoints", #for analysis,runs/250404-144225_burma14_testing new MCTS/checkpoints
-                "champion.pth.tar", #best transformer.tar,best pointer.tar,best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
-                ],
-                "numEps": 5,
-                "epochs": 5, 
+                "learning_rate": 0.1,
+                "dropout": 0.0,
             },
         ),
         (
-            "cpuct 1",  # Name of the experiment
+            "lr 0.01 dropout 0",  # Name of the experiment
             {
-                **preset_configs["light"],
-                "cuda": False,
-                # "architecture": "transformer_deepseek", #transformer_deepseek, pointer
-                # "tsp_instance": "tsplib/eil51.tsp",
-                "cpuct": 1.0,
-                "explicit_prints": False,
-                "numMCTSSims": 25,
-                "numMCTSSimsEval": 25,
-                "load_model": False,
-                "load_folder_file": [
-                "runs/250405-112228_burma14_testing new MCTS/checkpoints", #for analysis,runs/250404-144225_burma14_testing new MCTS/checkpoints
-                "champion.pth.tar", #best transformer.tar,best pointer.tar,best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
-                ],
-                "numEps": 5,
-                "epochs": 5, 
+                "learning_rate": 0.01,
+                "dropout": 0.0,
             },
         ),
         (
-            "cpuct 5",  # Name of the experiment
+            "lr 0.01 dropout 0.1",  # Name of the experiment
             {
-                **preset_configs["light"],
-                "cuda": False,
-                # "architecture": "transformer_deepseek", #transformer_deepseek, pointer
-                # "tsp_instance": "tsplib/eil51.tsp",
-                "cpuct": 5.0,
-                "explicit_prints": False,
-                "numMCTSSims": 25,
-                "numMCTSSimsEval": 25,
-                "load_model": False,
-                "load_folder_file": [
-                "runs/250405-112228_burma14_testing new MCTS/checkpoints", #for analysis,runs/250404-144225_burma14_testing new MCTS/checkpoints
-                "champion.pth.tar", #best transformer.tar,best pointer.tar,best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
-                ],
-                "numEps": 5,
-                "epochs": 5, 
+                "learning_rate": 0.01,
+                "dropout": 0.1,
             },
         ),
         (
-            "cpuct 10",  # Name of the experiment
+            "lr 0.1 dropout 0.1",  # Name of the experiment
             {
-                **preset_configs["light"],
-                "cuda": False,
-                # "architecture": "transformer_deepseek", #transformer_deepseek, pointer
-                # "tsp_instance": "tsplib/eil51.tsp",
-                "cpuct": 10.0,
-                "explicit_prints": False,
-                "numMCTSSims": 25,
-                "numMCTSSimsEval": 25,
-                "load_model": False,
-                "load_folder_file": [
-                "runs/250405-112228_burma14_testing new MCTS/checkpoints", #for analysis,runs/250404-144225_burma14_testing new MCTS/checkpoints
-                "champion.pth.tar", #best transformer.tar,best pointer.tar,best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
-                ],
-                "numEps": 5,
-                "epochs": 5, 
+                "learning_rate": 0.1,
+                "dropout": 0.1,
             },
         ),
+       
         # (
         #     "light mcts 25-100 eps 5, NO gpu",  # Name of the experiment
         #     {

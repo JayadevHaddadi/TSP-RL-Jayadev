@@ -124,7 +124,9 @@ class MCTS:
                 self.Ps[state_string] /= sum_Ps_s
             else:
                 if self.args.explicit_prints:
-                    log.info("All valid moves were masked, defaulting to uniform policy")
+                    log.info(
+                        "All valid moves were masked, defaulting to uniform policy"
+                    )
                 self.Ps[state_string] = self.Ps[state_string] + valids
                 self.Ps[state_string] /= np.sum(self.Ps[state_string])
 
@@ -149,16 +151,33 @@ class MCTS:
         best_act = -1
 
         if self.args.explicit_prints:
-            log.info(f"Evaluating moves for state {state_string} with Ns(s): {self.Ns[state_string]} visits:")
+            log.info(
+                f"Evaluating moves for state {state_string} with Ns(s): {self.Ns[state_string]} visits:"
+            )
 
         for a in range(self.game.getActionSize()):
             if valids[a]:
                 discount = 1
+                q_value = 0
                 if (state_string, a) in self.Qsa:
-                    u = self.Qsa[(state_string, a)] + (self.args.cpuct * self.Ps[state_string][a] * 
-                                                       math.sqrt(self.Ns[state_string]) / (
-                                                           1 + self.Nsa[(state_string, a)])
+                    q_value = self.Qsa[(state_string, a)]
+                    discount = (-0.01
+                        * (
+                            self.args.cpuct
+                            * self.Ns[state_string]
+                            ** (1 / (1 + self.Nsa[(state_string, a)]))
+                        )+ 1)
+                    u = q_value * (
+                        discount
+                        - self.Ps[state_string][a]
                     )
+
+                    # u = self.Qsa[(state_string, a)] + (
+                    #     self.args.cpuct
+                    #     * self.Ps[state_string][a]
+                    #     * math.sqrt(self.Ns[state_string])
+                    #     / (1 + self.Nsa[(state_string, a)])
+                    # )
                 else:
                     u = (
                         self.args.cpuct
@@ -168,7 +187,7 @@ class MCTS:
 
                 if self.args.explicit_prints:
                     log.info(
-                        f" Action {a}: Q-value: {self.Qsa.get((state_string, a), 0)}, Nsa(s,a): {self.Nsa.get((state_string, a), 0)}, Prior P: {self.Ps[state_string][a]:.3f}, discount: {discount:.3f}, Selection Score (u): {u:.3f}"
+                        f" Action {a}: Q-value: {q_value}, Nsa(s,a): {self.Nsa.get((state_string, a), 0)}, Prior P: {self.Ps[state_string][a]:.3f}, discount: {discount:.3f}, Selection Score (u): {u:.3f}"
                     )
 
                 if u > cur_best:
@@ -198,7 +217,11 @@ class MCTS:
         self.Ns[state_string] += 1
         if self.args.explicit_prints:
             log.info(f"Backpropagating value: {v}")
-            log.info(f"Updated Q-value for (s:{state_string}, a:{a}): {self.Qsa[(state_string, a)]:.3f}")
-            log.info(f"Updated visit count for (s:{state_string}, a:{a}): {self.Nsa[(state_string, a)]}")
+            log.info(
+                f"Updated Q-value for (s:{state_string}, a:{a}): {self.Qsa[(state_string, a)]:.3f}"
+            )
+            log.info(
+                f"Updated visit count for (s:{state_string}, a:{a}): {self.Nsa[(state_string, a)]}"
+            )
             log.info(f"Updated visit count for state: {self.Ns[state_string]}")
         return v

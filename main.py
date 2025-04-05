@@ -261,20 +261,80 @@ def main():
     # Example of using a preset configuration:
     arch_list = [
         (
-            "testing new MCTS",  # Name of the experiment
+            "cpuct 0",  # Name of the experiment
+            {
+                **preset_configs["light"],
+                "cuda": False,
+                # "architecture": "transformer_deepseek", #transformer_deepseek, pointer
+                # "tsp_instance": "tsplib/eil51.tsp",
+                "cpuct": 0.0,
+                "explicit_prints": False,
+                "numMCTSSims": 25,
+                "numMCTSSimsEval": 25,
+                "load_model": False,
+                "load_folder_file": [
+                "runs/250405-112228_burma14_testing new MCTS/checkpoints", #for analysis,runs/250404-144225_burma14_testing new MCTS/checkpoints
+                "champion.pth.tar", #best transformer.tar,best pointer.tar,best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
+                ],
+                "numEps": 5,
+                "epochs": 5, 
+            },
+        ),
+        (
+            "cpuct 1",  # Name of the experiment
+            {
+                **preset_configs["light"],
+                "cuda": False,
+                # "architecture": "transformer_deepseek", #transformer_deepseek, pointer
+                # "tsp_instance": "tsplib/eil51.tsp",
+                "cpuct": 1.0,
+                "explicit_prints": False,
+                "numMCTSSims": 25,
+                "numMCTSSimsEval": 25,
+                "load_model": False,
+                "load_folder_file": [
+                "runs/250405-112228_burma14_testing new MCTS/checkpoints", #for analysis,runs/250404-144225_burma14_testing new MCTS/checkpoints
+                "champion.pth.tar", #best transformer.tar,best pointer.tar,best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
+                ],
+                "numEps": 5,
+                "epochs": 5, 
+            },
+        ),
+        (
+            "cpuct 5",  # Name of the experiment
             {
                 **preset_configs["light"],
                 "cuda": False,
                 # "architecture": "transformer_deepseek", #transformer_deepseek, pointer
                 # "tsp_instance": "tsplib/eil51.tsp",
                 "cpuct": 5.0,
-                "explicit_prints": True,
+                "explicit_prints": False,
                 "numMCTSSims": 25,
                 "numMCTSSimsEval": 25,
-                "load_model": True,
+                "load_model": False,
                 "load_folder_file": [
-                "for analysis", #for analysis,runs/250404-144225_burma14_testing new MCTS/checkpoints
-                "best burma14 light.pth.tar", #best transformer.tar,best pointer.tar,best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
+                "runs/250405-112228_burma14_testing new MCTS/checkpoints", #for analysis,runs/250404-144225_burma14_testing new MCTS/checkpoints
+                "champion.pth.tar", #best transformer.tar,best pointer.tar,best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
+                ],
+                "numEps": 5,
+                "epochs": 5, 
+            },
+        ),
+        (
+            "cpuct 10",  # Name of the experiment
+            {
+                **preset_configs["light"],
+                "cuda": False,
+                # "architecture": "transformer_deepseek", #transformer_deepseek, pointer
+                # "tsp_instance": "tsplib/eil51.tsp",
+                "cpuct": 10.0,
+                "explicit_prints": False,
+                "numMCTSSims": 25,
+                "numMCTSSimsEval": 25,
+                "load_model": False,
+                "load_folder_file": [
+                "runs/250405-112228_burma14_testing new MCTS/checkpoints", #for analysis,runs/250404-144225_burma14_testing new MCTS/checkpoints
+                "champion.pth.tar", #best transformer.tar,best pointer.tar,best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
                 ],
                 "numEps": 5,
                 "epochs": 5, 

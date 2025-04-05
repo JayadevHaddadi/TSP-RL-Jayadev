@@ -285,8 +285,8 @@ def main():
             "load_model": False,
             "numMCTSSims": 100,
             "numMCTSSimsEval": 100,
-            # "numEps": 10,
-            "cpuct": 5,
+            "numEps": 1,
+            "cpuct": 1,
             },
         ),
         # (

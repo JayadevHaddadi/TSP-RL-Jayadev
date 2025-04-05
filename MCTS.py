@@ -5,6 +5,7 @@ import TSPState
 import TSPGame
 import NNetWrapper
 from tqdm import tqdm
+from utils import complete_tour_with_nearest_neighbor
 
 EPS = 1e-8
 log = logging.getLogger(__name__)
@@ -111,7 +112,9 @@ class MCTS:
                 self.Ps[state_string], leftover_v = self.Pred_cache[state_string]
                 self.cache_hits += 1
             else:
-                self.Ps[state_string], leftover_v = self.nnet.predict(tsp_state)
+                # self.Ps[state_string], leftover_v = self.nnet.predict(tsp_state)
+                leftover_v = complete_tour_with_nearest_neighbor(tsp_state)
+                self.Ps[state_string] = np.ones(self.game.getActionSize()) / self.game.getActionSize()
                 self.Pred_cache[state_string] = (self.Ps[state_string], leftover_v)
 
             total_cost = tsp_state.current_length + leftover_v

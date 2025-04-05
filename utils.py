@@ -1,7 +1,7 @@
 import numpy as np
-import os
 import logging
 import sys
+import copy
 
 
 ###################################
@@ -210,7 +210,7 @@ def load_tsp_instance(filepath):
             # End of file
             elif line == "EOF" or line.startswith("DISPLAY_DATA_SECTION"):
                 break
-            elif line.startswith("EDGE_WEIGHT_TYPE"): 
+            elif line.startswith("EDGE_WEIGHT_TYPE"):
                 EDGE_WEIGHT_TYPE = line.split()[-1]
             # Read coordinates if we're in the coordinates section
             elif reading_coords:
@@ -240,7 +240,75 @@ def load_tsp_instance(filepath):
 
     return coords, best_tour_length, EDGE_WEIGHT_TYPE
 
+
 def log_configuration(config):
     """Dynamically logs all configuration key-value pairs."""
     for key, value in config.items():
         logging.info(f"{key}: {value}")
+
+
+def complete_tour_with_nearest_neighbor(tsp_state):
+    """
+    Given a TSPState, simulates completing a full tour using the greedy nearest neighbor heuristic.
+
+    The function:
+    - Makes a deep copy of tsp_state so the original is unmodified.
+    - Starting from the current state (using the last visited node in tsp_state.tour),
+      repeatedly selects the nearest unvisited node.
+    - When no unvisited nodes remain, it adds the distance from the last visited node
+      back to the starting node.
+
+    Returns:
+        The full tour length as a float.
+    """
+    # Make a deep copy of tsp_state to avoid modifying the actual state.
+    state_copy = copy.deepcopy(tsp_state)
+
+    # If the tour is already complete, simply return the current tour length.
+    if state_copy.is_terminal():
+        return state_copy.get_tour_length()
+
+    # Initialize the total cost with the current length.
+    # total_cost = state_copy.current_length
+    total_cost = 0
+
+    # Determine the current node and the start node.
+    if len(state_copy.tour) > 0:
+        current_node = state_copy.tour[-1]
+        start_node = state_copy.tour[0]
+    else:
+        # If tour is empty, arbitrarily choose the first node (should not happen normally).
+        current_node = 0
+        start_node = 0
+        state_copy.tour.append(0)
+        state_copy.unvisited[0] = 0
+
+    # While there are still unvisited nodes, select the nearest neighbor.
+    while np.sum(state_copy.unvisited) > 0:
+        unvisited_indices = np.where(state_copy.unvisited == 1)[0]
+        if len(unvisited_indices) == 0:
+            break
+
+        best_distance = float("inf")
+        best_neighbor = None
+
+        # Evaluate all unvisited nodes to find the minimum distance.
+        for node in unvisited_indices:
+            d = state_copy.distance(current_node, node)
+            if d < best_distance:
+                best_distance = d
+                best_neighbor = node
+
+        # Add the best distance to the total cost.
+        total_cost += best_distance
+
+        # Update the state copy: append the chosen neighbor and mark it as visited.
+        state_copy.tour.append(int(best_neighbor))
+        state_copy.unvisited[int(best_neighbor)] = 0
+        current_node = best_neighbor
+
+    # Finally, add the closing leg from the last node back to the start.
+    closing_cost = state_copy.distance(current_node, start_node)
+    total_cost += closing_cost
+
+    return total_cost

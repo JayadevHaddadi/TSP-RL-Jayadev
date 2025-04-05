@@ -336,7 +336,7 @@ class Coach:
 
             # Train the current network (self.nnet) with the new examples
             self.nnet.save_checkpoint(self.args.checkpoint, "temp.pth.tar")
-            pi_loss, v_loss = self.nnet.train(trainExamples)
+            pi_loss, v_loss = 0, 0 #self.nnet.train(trainExamples)
             self.iteration_pi_loss_history.append(pi_loss)
             self.iteration_v_loss_history.append(v_loss)
 

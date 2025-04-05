@@ -278,11 +278,14 @@ def main():
         #     },
         # ),
         (
-            "pointer CPUCT 5",  # Name of the experiment
+            "trying heuristic",  # Name of the experiment
             {
-            "architecture": "pointer",  # Options: "gcn", "pointer"
+            "architecture": "gcn",  # Options: "gcn", "pointer"
             "explicit_prints": False,
-            "load_model": False, 
+            "load_model": False,
+            "numMCTSSims": 100,
+            "numMCTSSimsEval": 100,
+            # "numEps": 10,
             "cpuct": 5,
             },
         ),

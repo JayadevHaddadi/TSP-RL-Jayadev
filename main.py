@@ -205,7 +205,7 @@ def main():
             "max_gradient_norm": 5.0,  # Maximum gradient norm for clipping
             # Training Loop
             "numIters": 1000,  # Number of training iterations
-            "numEps": 5,  # Episodes per iteration
+            "numEps": 4,  # Episodes per iteration
             "epochs": 5,  # Training epochs per iteration
             "batch_size": 64,  # Batch size for training
             #####################################
@@ -238,7 +238,7 @@ def main():
             "maxlenOfQueue": 200000,  # Maximum length of the queue
             "cpuct": 1.0,  # Exploration constant in MCTS
             "no_improvement_threshold": 3,
-            "cpuct_update_factor": 1.2,
+            "cpuct_update_factor": 1.5,
             # Training History
             "numItersForTrainExamplesHistory": 20,
             "augmentationFactor": 1,  # Data augmentation factor
@@ -255,7 +255,8 @@ def main():
             ],
             "fixed_start": True,  # Set to False for random starts
             "fixed_start_node": 0,  # Which node to use when fixed_start=True
-            "num_workers": 4,  # Number of parallel self-play workers
+            "numEpisodesParallel": 8,
+            # "numSelfPlayEpisodes": 4,
             "buffer_size": 200000,  # Replay buffer size
             "checkpoint_interval": 5,  # How often to evaluate and save
 
@@ -282,15 +283,20 @@ def main():
         #     },
         # ),
         (
-            "trying heuristic",  # Name of the experiment
+            "normal",  # Name of the experiment
             {
             "architecture": "gcn",  # Options: "gcn", "pointer"
-            "explicit_prints": False,
-            "load_model": False,
+            "explicit_prints": True,
             "numMCTSSims": 25,
-            "numMCTSSimsEval": 50,
-            "numEps": 5,
+            "numMCTSSimsEval": 25,
+            "numEps": 1,
             "cpuct": 1,
+            
+            "load_model": True,  # Set True to load a pre-trained model
+            "load_folder_file": [
+                "for analysis",
+                "best burma14 light.pth.tar", #best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
+            ],
             },
         ),
         # (

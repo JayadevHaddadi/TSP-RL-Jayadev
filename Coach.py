@@ -4,6 +4,7 @@ import csv
 import copy
 from pickle import Pickler, Unpickler
 from random import shuffle
+import concurrent.futures
 
 import numpy as np
 from tqdm import tqdm
@@ -278,46 +279,34 @@ class Coach:
             mcts_stats = {"total_nodes": 0, "cache_hits": 0}
 
             # Self-play
-            for ep in tqdm(range(self.args.numEps), desc="Self Play"):
-                # We no longer create a new MCTS for each episode
-                # Track MCTS tree size before episode
-                pre_episode_nodes = len(self.mcts.Ns) if hasattr(self.mcts, "Ns") else 0
+            all_train_examples = []
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=self.args.numEpisodesParallel
+            ) as executor:
+                # Submit self-play episodes in parallel.
+                futures = [
+                    executor.submit(self.executeEpisode)
+                    for _ in range(self.args.numEps)
+                ]
+                for future in concurrent.futures.as_completed(futures):
+                    episode_examples = future.result()
+                    all_train_examples.extend(episode_examples)
 
-                episode_data = (
-                    self.executeEpisode()
-                )  # list of (state, pi, leftover_dist)
+            # Track MCTS tree growth
+            post_episode_nodes = len(self.mcts.Ns) if hasattr(self.mcts, "Ns") else 0
+            nodes_added = post_episode_nodes - len(self.mcts.Ns)
+            mcts_stats["total_nodes"] = post_episode_nodes
 
-                # Track MCTS tree growth
-                post_episode_nodes = (
-                    len(self.mcts.Ns) if hasattr(self.mcts, "Ns") else 0
-                )
-                nodes_added = post_episode_nodes - pre_episode_nodes
-                mcts_stats["total_nodes"] = post_episode_nodes
+            if hasattr(self.mcts, "cache_hits"):
+                mcts_stats["cache_hits"] = self.mcts.cache_hits
 
-                if hasattr(self.mcts, "cache_hits"):
-                    mcts_stats["cache_hits"] = self.mcts.cache_hits
-
-                if ep % 5 == 0:  # Log every 5 episodes
-                    log.info(
-                        f"Episode {ep}: MCTS tree size {post_episode_nodes} nodes (+{nodes_added} new)"
-                    )
-
-                # *** AUGMENT BEFORE ADDING TO iterationTrainExamples ***
-                if getattr(self.args, "augmentationFactor", 1) > 1:
-                    augmented_data = self.augmentExamples(episode_data)
-                    iterationTrainExamples.extend(augmented_data)
-                else:
-                    iterationTrainExamples.extend(episode_data)
-
-            # Log final MCTS statistics for this iteration
-            log.info(
-                f"Iteration {i} MCTS final size: {mcts_stats['total_nodes']} nodes"
-            )
+            if len(self.mcts.Ns) > 0:
+                log.info(f"Iteration {i} MCTS final size: {len(self.mcts.Ns)} nodes")
             if mcts_stats["cache_hits"] > 0:
                 log.info(f"MCTS cache hits: {mcts_stats['cache_hits']}")
 
             # Now add the iterationTrainExamples to trainExamplesHistory
-            self.trainExamplesHistory.append(iterationTrainExamples)
+            self.trainExamplesHistory.append(all_train_examples)
 
             if (
                 len(self.trainExamplesHistory)
@@ -452,7 +441,7 @@ class Coach:
 
             if self.no_improve_counter >= self.args.no_improvement_threshold:
                 self.args.cpuct *= self.args.cpuct_update_factor
-                print(
+                log.info(
                     f"Adaptive cpuct triggered at iteration {i}: cpuct increased to {self.args.cpuct}"
                 )
                 self.no_improve_counter = 0

@@ -208,16 +208,16 @@ class MCTS:
 
         if (state_string, a) in self.Qsa:
             # Average the new value v with the existing Q-value                    log.info("All valid moves were masked, defaulting to uniform policy")
-            # self.Qsa[(state_string, a)] = max(self.Qsa[(state_string, a)], v)
+            self.Qsa[(state_string, a)] = max(self.Qsa[(state_string, a)], v)
             
             # if we find a better value, we update the Q-value
             # if we find a worse value, we save the avarge
-            if(self.Qsa[(state_string, a)]<v):
-                self.Qsa[(state_string, a)] = v
-            else:
-                self.Qsa[(state_string, a)] = (
-                    self.Nsa[(state_string, a)] * self.Qsa[(state_string, a)] + v
-                ) / (self.Nsa[(state_string, a)] + 1)
+            # if(self.Qsa[(state_string, a)]<v):
+            #     self.Qsa[(state_string, a)] = v
+            # else:
+            #     self.Qsa[(state_string, a)] = (
+            #         self.Nsa[(state_string, a)] * self.Qsa[(state_string, a)] + v
+            #     ) / (self.Nsa[(state_string, a)] + 1)
             self.Nsa[(state_string, a)] += 1
         else:
             self.Qsa[(state_string, a)] = v

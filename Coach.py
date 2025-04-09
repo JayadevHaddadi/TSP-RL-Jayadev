@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 class Coach:
     def __init__(
-        self,
+        self, 
         game: TSPGame,
         nnet: NNetWrapper,
         args,
@@ -90,12 +90,20 @@ class Coach:
         self.best_episode_tour_episode = None
         self.best_episode_tour_history = []  # For plotting progress over time
 
+        # Store the initial cpuct value from args
+        self.initial_cpuct = self.args.cpuct
+        # Define the cpuct to use during evaluation (default to initial, or allow override via args)
+        self.eval_cpuct = self.args.get("eval_cpuct", self.initial_cpuct)
+        log.info(
+            f"Initial cpuct: {self.initial_cpuct}, Evaluation cpuct: {self.eval_cpuct}"
+        )
+
         # Optionally run a pre-training eval
         self.preTrainingEval()
 
     ###############################################################################
     # 1) Updated 'preTrainingEval' method to match the same folder structure
-    #    and naming conventions as after training.
+    #    and naming conventions as after training. 
     ###############################################################################
     def preTrainingEval(self):
         """
@@ -133,7 +141,9 @@ class Coach:
             )
             self.game.node_coordinates = coords
             state = self.game.getInitState(start_node=start_node)
-            temp_mcts = MCTS(self.game, self.nnet, self.args)
+            temp_mcts = MCTS(
+                self.game, self.nnet, self.args, cpuct_override=self.eval_cpuct
+            )
 
             while not self.game.isTerminal(state):
                 pi = temp_mcts.getActionProb(state, temp=0)
@@ -249,7 +259,7 @@ class Coach:
             )
 
         return examples
-
+    
     def learn(self):
         # Initialize a counter for iterations with no improvement.
         self.no_improve_counter = 0
@@ -350,27 +360,54 @@ class Coach:
             )
             log.info(f"Challenger avg length: {challenger_avg_len:.4f}")
 
-            # Store challenger results for plotting
+            # Store challenger results for plotting before potential reversion
             self.eval_avg_length_history.append(challenger_avg_len)
-            self.eval_set_lengths_history.append(challenger_lens)
+            self.eval_set_lengths_history.append(
+                challenger_lens
+            )  # Store challenger's detailed lengths
 
             # Compare the two networks
+            network_accepted = False  # Flag to track acceptance
             if challenger_avg_len <= champion_avg_len:
-                # Challenger is better or equal - accept the new network
+                # Challenger wins the head-to-head comparison for this iteration
                 log.info(
-                    f"[ACCEPTED] New network is better ({challenger_avg_len:.4f} vs {champion_avg_len:.4f})"
+                    f"[ACCEPTED Head-to-Head] New network better/equal ({challenger_avg_len:.4f} vs {champion_avg_len:.4f})"
                 )
+                network_accepted = True
                 self.accepted_iterations.append(i)
 
-                # Update champion network with the challenger's weights by saving and loading checkpoint
+                # --- Reset cpuct on acceptance ---
+                if self.args.cpuct != self.initial_cpuct:
+                    log.info(
+                        f"Resetting adaptive cpuct from {self.args.cpuct} back to initial {self.initial_cpuct}"
+                    )
+                    self.args.cpuct = self.initial_cpuct
+                # ---------------------------------
+
+                # **CRITICAL CHANGE:** Only update historical best and save 'best.pth.tar'
+                # if the challenger is better than the *overall best recorded average*
+                if challenger_avg_len < self.best_avg_length:
+                    log.info(
+                        f"*** New Overall Best Average: {challenger_avg_len:.4f} (previous: {self.best_avg_length:.4f}) ***"
+                    )
+                    self.best_avg_length = challenger_avg_len
+                    log.info("Saving new best model as best.pth.tar")
+                    # Save the current network (challenger) as the best
+                self.nnet.save_checkpoint(self.args.checkpoint, "best.pth.tar")
+                # else: # Challenger won head-to-head but wasn't a new overall best
+                # log.info(f"Challenger accepted but not a new overall best ({challenger_avg_len:.4f} vs best {self.best_avg_length:.4f})")
+                # pass # No need to save best.pth.tar
+
+                # Update the champion network to become the challenger for the *next* iteration's comparison
                 # No need for deepcopy which may not work with some neural networks
                 self.nnet.save_checkpoint(
-                    self.args.checkpoint, "champion_update.pth.tar"
+                    self.args.checkpoint,
+                    "champion_update.pth.tar",  # Save current nnet state
                 )
                 self.champion_nnet.load_checkpoint(
-                    self.args.checkpoint, "champion_update.pth.tar"
+                    self.args.checkpoint,
+                    "champion_update.pth.tar",  # Load it into champion
                 )
-
                 # Clean up temporary file
                 temp_path = os.path.join(
                     self.args.checkpoint, "champion_update.pth.tar"
@@ -378,26 +415,26 @@ class Coach:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
 
-                # If this is also better than our best so far, save as best.pth.tar
-                if challenger_avg_len <= self.best_avg_length:
-                    self.best_avg_length = challenger_avg_len
-                    log.info("New best average => saving model as best.pth.tar")
-                    self.nnet.save_checkpoint(self.args.checkpoint, "best.pth.tar")
+                # Reset improvement counter since the network weights changed
+                self.no_improve_counter = 0
+
             else:
-                # Champion is better - reject the new network
+                # Champion wins the head-to-head comparison
                 log.info(
-                    f"[REJECTED] Champion network is better ({champion_avg_len:.4f} vs {challenger_avg_len:.4f})"
+                    f"[REJECTED Head-to-Head] Champion network is better ({champion_avg_len:.4f} vs {challenger_avg_len:.4f})"
                 )
+                network_accepted = False
                 self.rejected_iterations.append(i)
 
-                # Revert to champion network - load champion weights into current network
+                # Revert current network (self.nnet) back to the champion's weights
                 self.champion_nnet.save_checkpoint(
-                    self.args.checkpoint, "revert_to_champion.pth.tar"
+                    self.args.checkpoint,
+                    "revert_to_champion.pth.tar",  # Save champion state
                 )
                 self.nnet.load_checkpoint(
-                    self.args.checkpoint, "revert_to_champion.pth.tar"
+                    self.args.checkpoint,
+                    "revert_to_champion.pth.tar",  # Load it back into nnet
                 )
-
                 # Clean up temporary file
                 temp_path = os.path.join(
                     self.args.checkpoint, "revert_to_champion.pth.tar"
@@ -405,9 +442,27 @@ class Coach:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
 
-                # Update the eval history with champion's performance instead
+                # Log the champion's performance again for this iteration's history
+                # (since the challenger was rejected, the performance for this iter is the champion's)
                 self.eval_avg_length_history[-1] = champion_avg_len
-                self.eval_set_lengths_history[-1] = champion_lens
+                self.eval_set_lengths_history[-1] = (
+                    champion_lens  # Overwrite with champion's detailed lengths
+                )
+
+                # Increment no improvement counter only if challenger was rejected
+                self.no_improve_counter += 1
+
+            # --- Adaptive CPUCT (moved after acceptance/rejection logic) ---
+            if (
+                not network_accepted
+                and self.no_improve_counter >= self.args.no_improvement_threshold
+            ):
+                old_cpuct = self.args.cpuct
+                self.args.cpuct *= self.args.cpuct_update_factor
+                log.info(
+                    f"Adaptive cpuct triggered (no improvement for {self.no_improve_counter} iters): cpuct increased from {old_cpuct:.4f} to {self.args.cpuct:.4f}"
+                )
+                self.no_improve_counter = 0  # Reset after triggering
 
             # Plot one or all stable sets?
             # If you want to plot all sets every X iterations
@@ -433,147 +488,12 @@ class Coach:
             # Assume you compute a variable 'current_best_tour_length' from evaluation of the iteration.
             # Lower tour length means improvement (minimization) or if you work with negative cost, then higher is better.
             # Adjust the check below based on your definitions.
-            if challenger_avg_len < self.best_tour_length:
-                self.best_tour_length = challenger_avg_len
-                self.no_improve_counter = 0
-            else:
-                self.no_improve_counter += 1
+            # if challenger_avg_len < self.best_tour_length:
+            #     self.best_tour_length = challenger_avg_len
+            #     self.no_improve_counter = 0
+            # else:
+            #     self.no_improve_counter += 1
 
-            if self.no_improve_counter >= self.args.no_improvement_threshold:
-                self.args.cpuct *= self.args.cpuct_update_factor
-                log.info(
-                    f"Adaptive cpuct triggered at iteration {i}: cpuct increased to {self.args.cpuct}"
-                )
-                self.no_improve_counter = 0
-
-    def augmentExamples(self, original_data):
-        """
-        For each (TSPState, pi, leftover_dist), produce (args.augmentationFactor - 1)
-        additional variations using random label permutations and rotation around (0.5, 0.5).
-
-        :param original_data: list of (state, pi, leftover_val).
-        :return: the new extended list.
-        """
-        factor = getattr(self.args, "augmentationFactor", 1)
-        if factor <= 1:
-            return original_data
-
-        augmented = []
-        for state, pi, leftover in original_data:
-            # Always keep the original
-            augmented.append((state, pi, leftover))
-
-            for _ in range(factor - 1):
-                # 1) Apply a random permutation
-                permuted_state, permuted_pi = self.applyRandomPermutation(state, pi)
-                # 2) Apply rotation about (0.5, 0.5)
-                rotated_state, rotated_pi = self.applyCenterRotation(
-                    permuted_state, permuted_pi
-                )
-                # leftover remains the same if distance truly unchanged
-                augmented.append((rotated_state, rotated_pi, leftover))
-
-        return augmented
-
-    def applyRandomPermutation(self, state, pi):
-        """
-        Randomly permute labels [0..n-1].
-        We create new TSPState, reorder node coords accordingly,
-        reorder the partial tour, and fix the unvisited array.
-        Also reorder the pi distribution.
-        """
-        n = state.num_nodes
-        perm = np.random.permutation(n)  # e.g. [2,0,1,...]
-
-        old_coords = np.array(state.node_coordinates)
-        new_coords = old_coords[perm].tolist()
-
-        old_tour = state.tour
-        new_tour = [perm[node] for node in old_tour]
-
-        old_unvisited = state.unvisited
-        new_unvisited = np.zeros_like(old_unvisited)
-        for old_lbl in range(n):
-            if old_unvisited[old_lbl] == 1:
-                new_lbl = perm[old_lbl]
-                new_unvisited[new_lbl] = 1
-
-        from TSPState import TSPState
-
-        # Create new distance matrix based on permutation
-        if state.distance_matrix is not None:
-            old_matrix = state.distance_matrix
-            new_matrix = np.zeros_like(old_matrix)
-            for i in range(n):
-                for j in range(n):
-                    new_matrix[perm[i]][perm[j]] = old_matrix[i][j]
-        else:
-            new_matrix = None
-
-        new_state = TSPState(
-            n,
-            new_coords,
-            distance_matrix=new_matrix,
-            start_node=perm[state.tour[0]] if state.tour else None,
-        )
-        new_state.tour = new_tour
-        new_state.unvisited = new_unvisited
-        # if you recompute the partial cost, do:
-        # new_state.current_length = self.recomputeTourLength(new_state)
-        # otherwise copy:
-        new_state.current_length = state.current_length
-
-        # reorder pi
-        new_pi = np.zeros(n, dtype=float)
-        for old_label, prob in enumerate(pi):
-            new_label = perm[old_label]
-            new_pi[new_label] = prob
-
-        return new_state, new_pi
-
-    def applyCenterRotation(self, state, pi):
-        """
-        Rotate all coordinates about (0.5, 0.5) by a random angle in [0, 2*pi).
-        Distances remain the same if TSP is in [0,1]^2.
-        We keep the same node labeling (tour/unvisited).
-        pi does not need label reorder, just the same array.
-
-        If you want partial cost to remain identical,
-        either recalc or trust that the TSP code uses purely index-based cost
-        => same leftover is valid if everything in [0,1]^2 doesn't break distance.
-        """
-        angle = np.random.uniform(0, 2 * np.pi)
-        cosA, sinA = np.cos(angle), np.sin(angle)
-
-        coords = state.node_coordinates
-        rotated_coords = []
-        for x, y in coords:
-            # shift center to (0.0,0.0)
-            dx = x - 0.5
-            dy = y - 0.5
-            # rotate
-            rx = dx * cosA - dy * sinA
-            ry = dx * sinA + dy * cosA
-            # shift back
-            rx += 0.5
-            ry += 0.5
-            rotated_coords.append([rx, ry])
-
-        from TSPState import TSPState
-
-        # For rotation, we need to recompute the distance matrix since distances change
-        # But we can also keep the same distances if simplicity is preferred
-        new_state = TSPState(
-            state.num_nodes,
-            rotated_coords,
-            distance_matrix=state.distance_matrix,  # Reuse same matrix for simplicity
-            start_node=state.tour[0] if state.tour else None,
-        )
-        new_state.tour = list(state.tour)
-        new_state.unvisited = state.unvisited.copy()
-        new_state.current_length = state.current_length
-
-        return new_state, np.array(pi, copy=True)
 
     def evaluateAllCoords(self):
         """
@@ -593,7 +513,9 @@ class Coach:
         for _, coords in enumerate(self.coords_for_eval):
             self.game.node_coordinates = coords
             state = self.game.getInitState()
-            temp_mcts = MCTS(self.game, self.nnet, self.args)
+            temp_mcts = MCTS(
+                self.game, self.nnet, self.args, cpuct_override=self.eval_cpuct
+            )
 
             while not self.game.isTerminal(state):
                 pi = temp_mcts.getActionProb(state, temp=0)
@@ -636,7 +558,9 @@ class Coach:
                 else None
             )
             state = self.game.getInitState(start_node=start_node)
-            temp_mcts = MCTS(self.game, network, self.args)
+            temp_mcts = MCTS(
+                self.game, network, self.args, cpuct_override=self.eval_cpuct
+            )
 
             while not self.game.isTerminal(state):
                 pi = temp_mcts.getActionProb(state, temp=0)
@@ -663,7 +587,7 @@ class Coach:
     def plotAllEvalTours(self, iteration):
         """
         Evaluate + plot final routes for *all* stable coords in subplots or individually,
-        but only if they represent an improvement over the previous best.
+        but only if they represent an improvement over the previous best. <-- Now enforces saving only on improvement
         Saving them in 'tours/other sets', named 'set{k}_iter_{iteration:03d}_len_{X}.png'.
         Typically called only every 'plot_all_eval_sets_interval' iteration.
         """
@@ -678,8 +602,16 @@ class Coach:
 
         for idx, coords in enumerate(self.coords_for_eval):
             self.game.node_coordinates = coords
-            state = self.game.getInitState()
-            temp_mcts = MCTS(self.game, self.nnet, self.args)
+            # Ensure fixed start node logic is consistent if needed
+            start_node = (
+                self.args.get("fixed_start_node", 0)
+                if self.args.get("fixed_start", True)
+                else None
+            )
+            state = self.game.getInitState(start_node=start_node)
+            temp_mcts = MCTS(
+                self.game, self.nnet, self.args, cpuct_override=self.eval_cpuct
+            )
 
             while not self.game.isTerminal(state):
                 pi = temp_mcts.getActionProb(state, temp=0)
@@ -697,11 +629,11 @@ class Coach:
             # Check if this is an improvement (strictly better)
             if length < self.best_eval_lengths[idx]:
                 log.info(
-                    f"Set {idx+1}: New best length {length:.4f} (previous: {self.best_eval_lengths[idx]:.4f})"
+                    f"Set {idx+1}: New best length {length:.4f} (previous: {self.best_eval_lengths[idx]:.4f}) - SAVING PLOT"
                 )
                 self.best_eval_lengths[idx] = length
 
-                # Only save plot for improvements
+                # --- Only save plot for improvements ---
                 filename = f"set{idx+1}_iter_{iteration:03d}_len_{length:.4f}.png"
                 out_path = os.path.join(other_folder, filename)
                 self.game.plotTour(
@@ -709,10 +641,15 @@ class Coach:
                     title=f"EvalSet {idx+1}, Iter={iteration}, Len={length:.4f} (Improvement)",
                     save_path=out_path,
                 )
+                # ----------------------------------------
             else:
                 log.info(
                     f"Set {idx+1}: Length {length:.4f} is not an improvement over {self.best_eval_lengths[idx]:.4f} - skipping plot"
                 )
+                # --- Remove plotting logic from here ---
+                # filename = f"set{idx+1}_iter_{iteration:03d}_len_{length:.4f}.png" # No longer needed
+                # out_path = os.path.join(other_folder, filename) # No longer needed
+                # self.game.plotTour(...) # Remove this call
 
         self.args.numMCTSSims = original_sims
 
@@ -722,7 +659,7 @@ class Coach:
     def plotSingleEvalTour(self, coords, iteration, set_idx=1):
         """
         Plots the final route for coordinate set #1 each iteration,
-        but only if it's an improvement over the previous best.
+        but only if it's an improvement over the previous best.  <-- Now enforces saving only on improvement
         Output file in 'tours/' => 'iter_{iteration:03d}_len_{length:.4f}.png'
         """
         tours_folder = os.path.join(self.folder, "tours")
@@ -732,8 +669,16 @@ class Coach:
         self.args.numMCTSSims = self.args.numMCTSSimsEval
 
         self.game.node_coordinates = coords
-        state = self.game.getInitState()
-        temp_mcts = MCTS(self.game, self.nnet, self.args)
+        # Ensure fixed start node logic is consistent if needed
+        start_node = (
+            self.args.get("fixed_start_node", 0)
+            if self.args.get("fixed_start", True)
+            else None
+        )
+        state = self.game.getInitState(start_node=start_node)
+        temp_mcts = MCTS(
+            self.game, self.nnet, self.args, cpuct_override=self.eval_cpuct
+        )
 
         while not self.game.isTerminal(state):
             pi = temp_mcts.getActionProb(state, temp=0)
@@ -752,11 +697,11 @@ class Coach:
         set_idx_zero_based = set_idx - 1  # Convert 1-based to 0-based index
         if length < self.best_eval_lengths[set_idx_zero_based]:
             log.info(
-                f"Set {set_idx}: New best length {length:.4f} (previous: {self.best_eval_lengths[set_idx_zero_based]:.4f})"
+                f"Set {set_idx}: New best length {length:.4f} (previous: {self.best_eval_lengths[set_idx_zero_based]:.4f}) - SAVING PLOT"
             )
             self.best_eval_lengths[set_idx_zero_based] = length
 
-            # Only save plot for improvements
+            # --- Only save plot for improvements ---
             filename = f"iter_{iteration:03d}_len_{length:.4f}.png"
             out_path = os.path.join(tours_folder, filename)
 
@@ -765,63 +710,18 @@ class Coach:
                 title=f"Set{set_idx}, Iter={iteration}, Len={length:.4f} (Improvement)",
                 save_path=out_path,
             )
+            # ----------------------------------------
         else:
             log.info(
                 f"Set {set_idx}: Length {length:.4f} is not an improvement over {self.best_eval_lengths[set_idx_zero_based]:.4f} - skipping plot"
             )
+            # --- Remove plotting logic from here ---
+            # filename = f"iter_{iteration:03d}_len_{length:.4f}.png" # No longer needed here
+            # out_path = os.path.join(tours_folder, filename) # No longer needed here
+            # self.game.plotTour(...) # Remove this call
+            # log.info(...) # Remove this log message about saving plot
 
         self.args.numMCTSSims = original_sims
-
-    def plot_acceptance_history(self, iteration):
-        """
-        Create a plot showing which iterations were accepted and rejected.
-        """
-        fig, ax = plt.subplots(figsize=(12, 3))
-
-        # Plot all iterations
-        all_iters = list(range(1, iteration + 1))
-        ax.scatter(
-            all_iters,
-            [0] * len(all_iters),
-            color="grey",
-            alpha=0.3,
-            s=50,
-            label="All Iterations",
-        )
-
-        # Plot accepted iterations
-        if self.accepted_iterations:
-            ax.scatter(
-                self.accepted_iterations,
-                [0] * len(self.accepted_iterations),
-                color="green",
-                marker="^",
-                s=100,
-                label="Accepted",
-            )
-
-        # Plot rejected iterations
-        if self.rejected_iterations:
-            ax.scatter(
-                self.rejected_iterations,
-                [0] * len(self.rejected_iterations),
-                color="red",
-                marker="x",
-                s=100,
-                label="Rejected",
-            )
-
-        # Remove y-axis ticks since this is just a timeline
-        ax.set_yticks([])
-        ax.set_xlabel("Iteration")
-        ax.set_title("Network Acceptance/Rejection History")
-        ax.grid(axis="x", alpha=0.3)
-        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=3)
-
-        # Save plot
-        acceptance_plot_path = os.path.join(self.folder, f"acceptance_history.png")
-        fig.savefig(acceptance_plot_path, dpi=300, bbox_inches="tight")
-        plt.close(fig)
 
     def plot_loss_and_length_history(self, iteration, eval_len):
         """
@@ -969,63 +869,6 @@ class Coach:
         # Save in main folder with higher DPI for better quality
         loss_plot_path = os.path.join(self.folder, f"loss_and_length_history.png")
         fig.savefig(loss_plot_path, dpi=300, bbox_inches="tight")
-        plt.close(fig)
-
-    ###############################################################################
-    # 2) In 'plotMultiEvalSubplots', ensure we do up to 4 columns AND
-    #    also draw a nearest neighbor line for each set if self.nn_lengths_for_eval is provided.
-    ###############################################################################
-    def plotMultiEvalSubplots(self, iteration):
-        """
-        Multi-subplot figure with up to 4 columns, one subplot per evaluation set.
-        We'll plot the final length across all iterations for that set,
-        plus a horizontal line for the NN solution if provided.
-        We'll store the figure in the main folder named 'evaluation_subplots.png'.
-        """
-        if not self.coords_for_eval:
-            return
-
-        n_sets = len(self.coords_for_eval)
-        # x-axis: iterations from 1..(current iteration index)
-        x = np.arange(1, len(self.eval_set_lengths_history) + 1)
-
-        # Up to 4 columns
-        cols = 4
-        rows = (n_sets + cols - 1) // cols  # ceiling division
-
-        fig, axes = plt.subplots(
-            rows, cols, figsize=(5 * cols, 4 * rows), squeeze=False
-        )
-        axes = axes.flatten()  # flatten so we can index easily
-
-        for idx in range(n_sets):
-            lengths_for_this_set = [hist[idx] for hist in self.eval_set_lengths_history]
-            ax = axes[idx]
-            ax.plot(x, lengths_for_this_set, marker="o", label=f"EvalSet {idx+1}")
-
-            # if we have NN length
-            if idx < len(self.nn_lengths_for_eval):
-                nn_len = self.nn_lengths_for_eval[idx]
-                ax.axhline(y=nn_len, color="red", linestyle="--", label="NN Length")
-
-            ax.set_ylabel("Tour Length")
-            ax.set_title(f"Set {idx+1} Over Iterations")
-            ax.grid(True)
-            ax.legend()
-
-        # Hide leftover axes
-        for i in range(n_sets, rows * cols):
-            axes[i].set_visible(False)
-
-        # Label X-axis
-        for ax in axes:
-            ax.set_xlabel("Iteration")
-
-        fig.suptitle(f"Multiple Evaluation Sets Subplots (Iter={iteration})")
-
-        out_path = os.path.join(self.folder, "evaluation_subplots.png")
-        fig.tight_layout()
-        fig.savefig(out_path)
         plt.close(fig)
 
     def saveTrainExamples(self):

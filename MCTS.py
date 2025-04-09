@@ -19,10 +19,12 @@ class MCTS:
     - getGameEnded returns final outcome if terminal, else 0.
     """
 
-    def __init__(self, game: TSPGame, nnet: NNetWrapper, args):
+    def __init__(self, game: TSPGame, nnet: NNetWrapper, args, cpuct_override=None):
         self.game = game
         self.nnet = nnet
         self.args = args
+        # Use override if provided, otherwise use the (potentially adaptive) value from args
+        self.cpuct = cpuct_override if cpuct_override is not None else self.args.cpuct
         self.Qsa = {}
         self.Nsa = {}
         self.Ns = {}
@@ -161,36 +163,25 @@ class MCTS:
 
         for a in range(self.game.getActionSize()):
             if valids[a]:
-                discount = 1
-                q_value = self.Qsa.get((state_string, a), 0)
-                if (state_string, a) in self.Qsa:
-                    discount = (-0.01
-                        * (
-                            self.args.cpuct
-                            * self.Ns[state_string]
-                            ** (1 / (1 + self.Nsa[(state_string, a)]))
-                        )+ 1)
-                    u = q_value * (
-                        discount
-                        # - self.Ps[state_string][a]
-                    )
+                # Calculate exploration bonus using self.cpuct
+                exploration_bonus = (
+                    self.cpuct
+                    * self.Ps[state_string][a]
+                    * math.sqrt(self.Ns[state_string])
+                )
 
-                    # u = q_value + (
-                    #     self.args.cpuct
-                    #     * self.Ps[state_string][a]
-                    #     * math.sqrt(self.Ns[state_string])
-                    #     / (1 + self.Nsa[(state_string, a)])
-                    # )
-                else:
-                    u = (
-                        self.args.cpuct
-                        * self.Ps[state_string][a]
-                        * math.sqrt(self.Ns[state_string] + EPS)
+                if (state_string, a) in self.Qsa:
+                    q_value = self.Qsa[(state_string, a)]
+                    u = q_value - (
+                        exploration_bonus / (1 + self.Nsa[(state_string, a)])
                     )
+                else:
+                    q_value = 0  # Placeholder cost
+                    u = q_value - (exploration_bonus / (1 + 0))
 
                 if self.args.explicit_prints:
                     log.info(
-                        f" Action {a}: Q-value: {q_value:.3f}, Nsa(s,a): {self.Nsa.get((state_string, a), 0)}, Prior P: {self.Ps[state_string][a]:.3f}, discount: {discount:.3f}, Selection Score (u): {u:.3f}"
+                        f" Action {a}: Q-value: {q_value:.3f}, Nsa(s,a): {self.Nsa.get((state_string, a), 0)}, Prior P: {self.Ps[state_string][a]:.3f}, discount: {exploration_bonus:.3f}, Selection Score (u): {u:.3f}"
                     )
 
                 if u > cur_best:
@@ -209,7 +200,7 @@ class MCTS:
         if (state_string, a) in self.Qsa:
             # Average the new value v with the existing Q-value                    log.info("All valid moves were masked, defaulting to uniform policy")
             self.Qsa[(state_string, a)] = max(self.Qsa[(state_string, a)], v)
-            
+
             # if we find a better value, we update the Q-value
             # if we find a worse value, we save the avarge
             # if(self.Qsa[(state_string, a)]<v):

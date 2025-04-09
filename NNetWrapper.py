@@ -112,7 +112,20 @@ class NNetWrapper(NeuralNet):
         return node_features.unsqueeze(0), adjacency_matrix.unsqueeze(0)
 
     def train(self, examples):
-        optimizer = optim.Adam(self.nnet.parameters(), lr=self.args.learning_rate)
+        policy_params = []
+        shared_value_params = []
+        for name, param in self.nnet.named_parameters():
+            if "pi" in name:  # adjust this if your network names differ
+                policy_params.append(param)
+            else:
+                shared_value_params.append(param)
+
+        optimizer = optim.Adam(
+            [
+                {"params": policy_params, "lr": self.args.pi_lr},
+                {"params": shared_value_params, "lr": self.args.learning_rate},
+            ]
+        )
         scheduler = optim.lr_scheduler.StepLR(
             optimizer, step_size=self.args.lr_step_size, gamma=self.args.lr_decay
         )

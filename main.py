@@ -197,6 +197,7 @@ def main():
             #####################################
             # Optimization
             "learning_rate": 0.01,  # Initial learning rate (1e-4 to 1e-2)
+            "pi_lr": 0.00001,  # Initial learning rate for policy network
             "lr_decay": 0.9,  # Learning rate decay factor (0.9-0.99)
             "lr_step_size": 5, 
             "weight_decay": 1e-4,  # L2 regularization (1e-5 to 1e-3)
@@ -238,7 +239,7 @@ def main():
             "maxlenOfQueue": 200000,  # Maximum length of the queue
             "cpuct": 1.0,  # Exploration constant in MCTS
             "no_improvement_threshold": 3,
-            "cpuct_update_factor": 1.5,
+            "cpuct_update_factor": 1.05,
             # Training History
             "numItersForTrainExamplesHistory": 20,
             "augmentationFactor": 1,  # Data augmentation factor
@@ -266,33 +267,18 @@ def main():
 
     # Example of using a preset configuration:
     arch_list = [
-        # (
-        #     "normal javadev mcts CPUCT 0",  # Name of the experiment
-        #     {
-        #     "explicit_prints": False,
-        #     "load_model": False, 
-        #     "cpuct": 0,
-        #     },
-        # ),
-        # (
-        #     "normal javadev mcts CPUCT 1",  # Name of the experiment
-        #     {
-        #     "explicit_prints": False,
-        #     "load_model": False, 
-        #     "cpuct": 1.0,
-        #     },
-        # ),
         (
-            "normal",  # Name of the experiment
+            "normal learning_rate 0.01",  # Name of the experiment
             {
             "architecture": "gcn",  # Options: "gcn", "pointer"
-            "explicit_prints": True,
+            "explicit_prints": False,
             "numMCTSSims": 25,
             "numMCTSSimsEval": 25,
-            "numEps": 1,
+            "learning_rate": 0.01, 
+            "numEps": 4,
             "cpuct": 1,
             
-            "load_model": True,  # Set True to load a pre-trained model
+            "load_model": False,  # Set True to load a pre-trained model
             "load_folder_file": [
                 "for analysis",
                 "best burma14 light.pth.tar", #best burma14 light.pth.tar,best EIL51 6 procent off sol.tar

@@ -215,3 +215,19 @@ class TSPNNet(nn.Module):
         v = self.value_head(features)
 
         return pi, v.squeeze(-1)
+
+    def policy_parameters(self):
+        """Returns an iterator over the policy head parameters."""
+        return self.policy_head.parameters()
+
+    def value_parameters(self):
+        """Returns an iterator over the value head parameters."""
+        return self.value_head.parameters()
+
+    def shared_parameters(self):
+        """Returns an iterator over parameters NOT in policy or value heads."""
+        policy_ids = {id(p) for p in self.policy_parameters()}
+        value_ids = {id(p) for p in self.value_parameters()}
+        for p in self.parameters():
+            if id(p) not in policy_ids and id(p) not in value_ids:
+                yield p

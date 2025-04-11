@@ -112,20 +112,44 @@ class NNetWrapper(NeuralNet):
         return node_features.unsqueeze(0), adjacency_matrix.unsqueeze(0)
 
     def train(self, examples):
-        policy_params = []
-        shared_value_params = []
-        for name, param in self.nnet.named_parameters():
-            if "pi" in name:  # adjust this if your network names differ
-                policy_params.append(param)
-            else:
-                shared_value_params.append(param)
+        # Check if the underlying nnet has the specific parameter methods
+        if (
+            hasattr(self.nnet, "policy_parameters")
+            and hasattr(self.nnet, "value_parameters")
+            and hasattr(self.nnet, "shared_parameters")
+        ):
+            print("Using specific parameter groups for optimizer.")
+            optimizer = optim.Adam(
+                [
+                    {"params": self.nnet.policy_parameters(), "lr": self.args.pi_lr},
+                    {
+                        "params": self.nnet.value_parameters(),
+                        "lr": self.args.learning_rate,
+                    },  # Assuming value uses main LR
+                    {
+                        "params": self.nnet.shared_parameters(),
+                        "lr": self.args.learning_rate,
+                    },  # Assuming shared uses main LR
+                ]
+            )
+        else:
+            # Fallback to the less reliable name-based method or just a single LR
+            print(
+                "Warning: Using fallback optimizer setup (single LR or name-based). Name-based might be incorrect for GCN."
+            )
+            # Option 1: Fallback to single LR for all params (safer than wrong name-based)
+            optimizer = optim.Adam(self.nnet.parameters(), lr=self.args.learning_rate)
+            # Option 2: Keep the potentially incorrect name-based logic as a fallback (use with caution)
+            # policy_params = []
+            # other_params = []
+            # for name, param in self.nnet.named_parameters():
+            #     if "pi" in name: policy_params.append(param)
+            #     else: other_params.append(param)
+            # optimizer = optim.Adam([
+            #     {'params': policy_params, 'lr': self.args.pi_lr},
+            #     {'params': other_params, 'lr': self.args.learning_rate},
+            # ])
 
-        optimizer = optim.Adam(
-            [
-                {"params": policy_params, "lr": self.args.pi_lr},
-                {"params": shared_value_params, "lr": self.args.learning_rate},
-            ]
-        )
         scheduler = optim.lr_scheduler.StepLR(
             optimizer, step_size=self.args.lr_step_size, gamma=self.args.lr_decay
         )

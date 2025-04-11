@@ -281,7 +281,7 @@ def main():
             "load_model": False,  # Set True to load a pre-trained model
             "load_folder_file": [
                 "for analysis",
-                "best burma14 light.pth.tar", #best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
+                "best pointer.tar", #best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
             ],
             },
         ),

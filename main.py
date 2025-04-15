@@ -290,6 +290,27 @@ def main():
                 # ... gcn config ...
             },
         ),
+        (
+            "transformer",  # Renamed from "normal" for clarity
+            {
+                "architecture": "transformer",
+                # ... gcn config ...
+            },
+        ),
+        (
+            "pointer",  # Renamed from "normal" for clarity
+            {
+                "architecture": "pointer",
+                # ... gcn config ...
+            },
+        ),
+        (
+            "conformer",  # Renamed from "normal" for clarity
+            {
+                "architecture": "conformer",
+                # ... gcn config ...
+            },
+        ),
         # ... other experiments ...
     ]
 

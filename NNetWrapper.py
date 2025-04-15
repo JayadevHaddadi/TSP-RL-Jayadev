@@ -35,6 +35,10 @@ class NNetWrapper(NeuralNet):
             from TSPNNet_GCN import TSPNNet
 
             self.nnet = TSPNNet(game, args)
+        elif args.get("architecture") == "gat":
+            from TSPNNet_GAT import TSPNNet_GAT
+
+            self.nnet = TSPNNet_GAT(game, args)
         elif args.get("architecture") == "conformer":
             from TSPNNet_Conformer import ConformerNNet
 

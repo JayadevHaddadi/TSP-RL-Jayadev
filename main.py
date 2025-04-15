@@ -181,10 +181,10 @@ def main():
             "architecture": "gcn",  # Options: "gcn", "pointer", "transformer", "conformer", "graphpointer"
             "num_channels": 128,  # Width of network (64-1024). Larger = more expressive but slower
             "num_layers": 4,  # Number of GCN layers (2-16). Deeper = larger receptive field
-            "embedding_dim": 64,  # Initial node embedding size (32-256)
+            "embedding_dim": 128,  # Initial node embedding size (32-256)
             "hidden_dim": 128,  # Hidden layer width (64-512)
             # Attention & Regularization
-            "heads": 4,  # Number of attention heads (4-16). More heads = finer-grained attention
+            "heads": 8,  # Number of attention heads (4-16). More heads = finer-grained attention
             "dropout": 0.1,  # Dropout rate (0.0-0.5). Higher = more regularization
             "activation": "relu",  # Activation function: 'relu', 'gelu', 'elu'
             # Architecture Components
@@ -235,7 +235,7 @@ def main():
             # MCTS & Evaluation Parameters
             #####################################
             "numMCTSSims": 25,  # Number of MCTS simulations during training
-            "numMCTSSimsEval": 50,  # Number of MCTS simulations during evaluation
+            "numMCTSSimsEval": 25,  # Number of MCTS simulations during evaluation
             "maxlenOfQueue": 200000,  # Maximum length of the queue
             "cpuct": 1.0,  # Exploration constant in MCTS
             "no_improvement_threshold": 3,
@@ -266,224 +266,31 @@ def main():
     # Example of using a preset configuration:
     arch_list = [
         (
-            "gpn_test",  # Name of the experiment
+            "gat_test",  # Name of the experiment
             {
-                "architecture": "graphpointer",
+                "architecture": "gat",
                 "embedding_dim": 128,
                 "heads": 8,
-                "num_layers": 3,  # Example GPN config
+                "num_layers": 4,  # Example GAT config
+                "global_pool": "mean",
                 # ... other overrides ...
             },
         ),
         (
-            "normal",  # Name of the experiment
+            "gpn_test",
             {
-                "architecture": "gcn",  # Options: "gcn", "pointer"
-                "numMCTSSims": 25,
-                "numMCTSSimsEval": 25,
-                "learning_rate": 0.01,
-                "numEps": 4,
-                "cpuct": 1,
+                "architecture": "graphpointer",
+                # ... gpn config ...
             },
         ),
-        # (
-        #     "mcts 50",  # Name of the experiment
-        #     {
-        #     "architecture": "gcn",  # Options: "gcn", "pointer"
-        #     "numMCTSSims": 50,
-        #     "numMCTSSimsEval": 50,
-        #     "learning_rate": 0.01,
-        #     "numEps": 4,
-        #     "cpuct": 1,
-        #     },
-        # ),
-        # (
-        #     "medium",  # Name of the experiment
-        #     {
-        #     **preset_configs["medium"],
-        #     "architecture": "gcn",  # Options: "gcn", "pointer"
-        #     "numMCTSSims": 25,
-        #     "numMCTSSimsEval": 25,
-        #     "learning_rate": 0.01,
-        #     "numEps": 4,
-        #     "cpuct": 1,
-        #     },
-        # ),
-        # (
-        #     "medium 50 mcts",  # Name of the experiment
-        #     {
-        #     **preset_configs["medium"],
-        #     "architecture": "gcn",  # Options: "gcn", "pointer"
-        #     "numMCTSSims": 50,
-        #     "numMCTSSimsEval": 50,
-        #     "learning_rate": 0.01,
-        #     "numEps": 4,
-        #     "cpuct": 1,
-        #     },
-        # ),
-        # (
-        #     "loading best new algo to use old state value prediction",  # Name of the experiment
-        #     {
-        #     "architecture": "gcn",  # Options: "gcn", "pointer"
-        #     "explicit_prints": False,
-        #     "numMCTSSims": 25,
-        #     "numMCTSSimsEval": 25,
-        #     "learning_rate": 0.01,
-        #     "numEps": 4,
-        #     "cpuct": 1,
-        #     "load_model": True,  # Set True to load a pre-trained model
-        #     "load_folder_file": [
-        #         "for analysis",
-        #         "best burma14 light fast learning.pth.tar", #best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
-        #     ],
-        #     },
-        # ),
-        # (
-        #     "normal javadev mcts CPUCT 10",  # Name of the experiment
-        #     {
-        #     "explicit_prints": False,
-        #     "load_model": False,
-        #     "cpuct": 10,
-        #     },
-        # ),
-        # (
-        #     "lr 0.01 dropout 0",  # Name of the experiment
-        #     {
-        #         "learning_rate": 0.01,
-        #         "dropout": 0.0,
-        #     },
-        # ),
-        # (
-        #     "lr 0.01 dropout 0.1",  # Name of the experiment
-        #     {
-        #         "learning_rate": 0.01,
-        #         "dropout": 0.1,
-        #     },
-        # ),
-        # (
-        #     "lr 0.1 dropout 0.1",  # Name of the experiment
-        #     {
-        #         "learning_rate": 0.1,
-        #         "dropout": 0.1,
-        #     },
-        # ),
-        # (
-        #     "light mcts 25-100 eps 5, NO gpu",  # Name of the experiment
-        #     {
-        #         **preset_configs["light"],
-        #         "cuda": False,
-        #         "tsp_instance": "tsplib/burma14.tsp",
-        #         "numMCTSSims": 25,
-        #         "numMCTSSimsEval": 100,
-        #         "numEps": 5,
-        #     },
-        # ),
-        # (
-        #     "medium mcts 50 eps 10",  # Name of the experiment
-        #     {
-        #         **preset_configs["medium"],
-        #         "tsp_instance": "tsplib/burma14.tsp",
-        #         "numMCTSSims": 50,
-        #         "numMCTSSimsEval": 50,
-        #         "numEps": 10,
-        #     },
-        # ),
-        # (
-        #     "heavy",  # Name of the experiment
-        #     {
-        #         **preset_configs["heavy"],  # Use heavy configuration
-        #         "numMCTSSims": 150,
-        #         "numMCTSSimsEval": 150,
-        #         "numEps": 10,
-        #     },
-        # ),
-        # (
-        #     "medium",  # Name of the experiment
-        #     {
-        #         **preset_configs["medium"],
-        #         "numMCTSSims": 50,
-        #         "numMCTSSimsEval": 50,
-        #         "numEps": 7,
-        #     },
-        # ),
-        # (
-        #     "pointer_light",  # Name of the experiment
-        #     {
-        #         "architecture": "pointer",
-        #         **preset_configs["light"],
-        #         "numMCTSSims": 25,
-        #         "numMCTSSimsEval": 25,
-        #         "numEps": 5,
-        #     },
-        # ),
-        # (
-        #     "transformer_light",  # Name of the experiment
-        #     {
-        #         "architecture": "transformer_deepseek",
-        #         **preset_configs["light"],
-        #         "numMCTSSims": 25,
-        #         "numMCTSSimsEval": 25,
-        #         "numEps": 5,
-        #     },
-        # ),
-        # (
-        #     "burma14_light",  # Name of the experiment
-        #     {
-        #         **preset_configs["light"],  # Use light configuration
-        #         "numMCTSSims": 25,
-        #         "numMCTSSimsEval": 25,
-        #         "numEps": 5,
-        #     },
-        # ),
-        # (
-        #     "burma14_pointer_light",  # Name of the experiment
-        #     {
-        #         "architecture": "pointer",
-        #         **preset_configs["medium"],
-        #         "numMCTSSims": 50,
-        #         "numMCTSSimsEval": 50,
-        #         "numEps": 7,
-        #     },
-        # ),
-        # (
-        #     "burma14_transformer_deepseek_light",  # Name of the experiment
-        #     {
-        #         "architecture": "transformer_deepseek",
-        #         **preset_configs["medium"],
-        #         "numMCTSSims": 50,
-        #         "numMCTSSimsEval": 50,
-        #         "numEps": 7,
-        #     },
-        # ),
-        # (
-        #     "burma14_heavy",  # Name of the experiment
-        #     {
-        #         **preset_configs["heavy"],  # Use heavy configuration
-        #         "numMCTSSims": 100,
-        #         "numMCTSSimsEval": 100,
-        #         "numEps": 10,
-        #     },
-        # ),
-        # (
-        #     "burma14_conformer",  # Conformer based experiment
-        #     {
-        #         "architecture": "conformer",
-        #         **preset_configs["light"],
-        #         "numMCTSSims": 25,
-        #         "numMCTSSimsEval": 25,
-        #         "numEps": 5,
-        #     },
-        # ),
-        # (
-        #     "burma14_conformer",  # Conformer based experiment
-        #     {
-        #         "architecture": "conformer",
-        #         **preset_configs["medium"],
-        #         "numMCTSSims": 50,
-        #         "numMCTSSimsEval": 50,
-        #         "numEps": 7,
-        #     },
-        # ),
+        (
+            "gcn_normal",  # Renamed from "normal" for clarity
+            {
+                "architecture": "gcn",
+                # ... gcn config ...
+            },
+        ),
+        # ... other experiments ...
     ]
 
     # Generate ONE shared set of evaluation TSPs for consistent comparison

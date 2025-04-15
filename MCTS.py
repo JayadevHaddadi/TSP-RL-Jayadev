@@ -181,7 +181,7 @@ class MCTS:
                         self.args.cpuct
                         * self.Ns[state_string]
                         ** (1 / (1 + Nsa))
-                    )+ 1)
+                    )+ 1 - self.Ps[state_string][a])
                 
                 if (state_string, a) in self.Qsa:
                     q_value = self.Qsa[(state_string, a)]

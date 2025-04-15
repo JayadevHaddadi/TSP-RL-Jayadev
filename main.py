@@ -178,7 +178,7 @@ def main():
             # Neural Network Architecture
             #####################################
             # Core Architecture
-            "architecture": "gcn",  # Options: "gcn", "pointer", "transformer", "conformer"
+            "architecture": "gcn",  # Options: "gcn", "pointer", "transformer", "conformer", "graphpointer"
             "num_channels": 128,  # Width of network (64-1024). Larger = more expressive but slower
             "num_layers": 4,  # Number of GCN layers (2-16). Deeper = larger receptive field
             "embedding_dim": 64,  # Initial node embedding size (32-256)
@@ -199,7 +199,7 @@ def main():
             "learning_rate": 0.01,  # Initial learning rate (1e-4 to 1e-2)
             "pi_lr": 0.00001,  # Initial learning rate for policy network
             "lr_decay": 0.9,  # Learning rate decay factor (0.9-0.99)
-            "lr_step_size": 5, 
+            "lr_step_size": 5,
             "weight_decay": 1e-4,  # L2 regularization (1e-5 to 1e-3)
             "grad_clip": 5.0,  # Gradient clipping threshold
             "batch_norm": True,  # Use batch normalization
@@ -252,7 +252,7 @@ def main():
             "load_model": False,  # Set True to load a pre-trained model
             "load_folder_file": [
                 "for analysis",
-                "best burma14 light.pth.tar", #best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
+                "best burma14 light.pth.tar",  # best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
             ],
             "fixed_start": True,  # Set to False for random starts
             "fixed_start_node": 0,  # Which node to use when fixed_start=True
@@ -260,59 +260,67 @@ def main():
             # "numSelfPlayEpisodes": 4,
             "buffer_size": 200000,  # Replay buffer size
             "checkpoint_interval": 5,  # How often to evaluate and save
-
-        
         }
     )
 
     # Example of using a preset configuration:
     arch_list = [
         (
+            "gpn_test",  # Name of the experiment
+            {
+                "architecture": "graphpointer",
+                "embedding_dim": 128,
+                "heads": 8,
+                "num_layers": 3,  # Example GPN config
+                # ... other overrides ...
+            },
+        ),
+        (
             "normal",  # Name of the experiment
             {
-            "architecture": "gcn",  # Options: "gcn", "pointer"
-            "numMCTSSims": 25,
-            "numMCTSSimsEval": 25,
-            "learning_rate": 0.01, 
-            "numEps": 4,
-            "cpuct": 1,
+                "architecture": "gcn",  # Options: "gcn", "pointer"
+                "numMCTSSims": 25,
+                "numMCTSSimsEval": 25,
+                "learning_rate": 0.01,
+                "numEps": 4,
+                "cpuct": 1,
             },
         ),
-        (
-            "mcts 50",  # Name of the experiment
-            {
-            "architecture": "gcn",  # Options: "gcn", "pointer"
-            "numMCTSSims": 50,
-            "numMCTSSimsEval": 50,
-            "learning_rate": 0.01, 
-            "numEps": 4,
-            "cpuct": 1,
-            },
-        ),
-        (
-            "medium",  # Name of the experiment
-            {
-            **preset_configs["medium"],
-            "architecture": "gcn",  # Options: "gcn", "pointer"
-            "numMCTSSims": 25,
-            "numMCTSSimsEval": 25,
-            "learning_rate": 0.01, 
-            "numEps": 4,
-            "cpuct": 1,
-            },
-        ),
-        (
-            "medium 50 mcts",  # Name of the experiment
-            {
-            **preset_configs["medium"],
-            "architecture": "gcn",  # Options: "gcn", "pointer"
-            "numMCTSSims": 50,
-            "numMCTSSimsEval": 50,
-            "learning_rate": 0.01, 
-            "numEps": 4,
-            "cpuct": 1,
-            },
-        ),
+        # (
+        #     "mcts 50",  # Name of the experiment
+        #     {
+        #     "architecture": "gcn",  # Options: "gcn", "pointer"
+        #     "numMCTSSims": 50,
+        #     "numMCTSSimsEval": 50,
+        #     "learning_rate": 0.01,
+        #     "numEps": 4,
+        #     "cpuct": 1,
+        #     },
+        # ),
+        # (
+        #     "medium",  # Name of the experiment
+        #     {
+        #     **preset_configs["medium"],
+        #     "architecture": "gcn",  # Options: "gcn", "pointer"
+        #     "numMCTSSims": 25,
+        #     "numMCTSSimsEval": 25,
+        #     "learning_rate": 0.01,
+        #     "numEps": 4,
+        #     "cpuct": 1,
+        #     },
+        # ),
+        # (
+        #     "medium 50 mcts",  # Name of the experiment
+        #     {
+        #     **preset_configs["medium"],
+        #     "architecture": "gcn",  # Options: "gcn", "pointer"
+        #     "numMCTSSims": 50,
+        #     "numMCTSSimsEval": 50,
+        #     "learning_rate": 0.01,
+        #     "numEps": 4,
+        #     "cpuct": 1,
+        #     },
+        # ),
         # (
         #     "loading best new algo to use old state value prediction",  # Name of the experiment
         #     {
@@ -320,10 +328,9 @@ def main():
         #     "explicit_prints": False,
         #     "numMCTSSims": 25,
         #     "numMCTSSimsEval": 25,
-        #     "learning_rate": 0.01, 
+        #     "learning_rate": 0.01,
         #     "numEps": 4,
         #     "cpuct": 1,
-            
         #     "load_model": True,  # Set True to load a pre-trained model
         #     "load_folder_file": [
         #         "for analysis",
@@ -335,7 +342,7 @@ def main():
         #     "normal javadev mcts CPUCT 10",  # Name of the experiment
         #     {
         #     "explicit_prints": False,
-        #     "load_model": False, 
+        #     "load_model": False,
         #     "cpuct": 10,
         #     },
         # ),
@@ -360,7 +367,6 @@ def main():
         #         "dropout": 0.1,
         #     },
         # ),
-       
         # (
         #     "light mcts 25-100 eps 5, NO gpu",  # Name of the experiment
         #     {
@@ -496,15 +502,15 @@ def main():
             logging.info(
                 f"Evaluation using TSP instance with {len(instance_coords)} nodes"
             )
-            coords_for_eval = [instance_coords]  # Single set with instance coordinates
-            nn_len, _ = compute_nn_tour(instance_coords)
-            nn_lengths_for_eval = [nn_len]
-        else:
-            logging.error(
-                f"Invalid coordinate format in TSP instance: {base_args.tsp_instance}"
-            )
-            return
+        coords_for_eval = [instance_coords]  # Single set with instance coordinates
+        nn_len, _ = compute_nn_tour(instance_coords)
+        nn_lengths_for_eval = [nn_len]
     else:
+        logging.error(
+            f"Invalid coordinate format in TSP instance: {base_args.tsp_instance}"
+        )
+        #         return
+        # else:
         # Generate random evaluation sets
         common_num_nodes = base_args.num_nodes
         for _ in range(base_args.coordinatesToEvaluate):

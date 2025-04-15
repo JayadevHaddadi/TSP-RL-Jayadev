@@ -77,39 +77,57 @@ class NNetWrapper(NeuralNet):
                 (1, self.board_size, self.board_size),
                 device=self.normalized_coords.device,
             )
-            return nf, dummy_adj
+            return nf, dummy_adj, None  # Return None for current_node_idx
         num_nodes = self.board_size
         normalized_coords = self.normalized_coords  # Use precomputed tensor
 
         tour = state.tour
         tour_positions = torch.zeros(num_nodes, device=normalized_coords.device)
         is_visited = torch.zeros(num_nodes, device=normalized_coords.device)
-        for idx, node in enumerate(tour):
-            if num_nodes > 1:
-                tour_positions[node] = idx / (num_nodes - 1)
-            else:
-                tour_positions[node] = 0.0
-            is_visited[node] = 1
+        current_node_idx = None  # Initialize
+
+        if tour:  # If tour is not empty
+            current_node_idx = tour[-1]  # Get the last node added
+            for idx, node in enumerate(tour):
+                # Normalize tour position
+                tour_positions[node] = (
+                    idx + 1
+                ) / num_nodes  # Use 1 to N scaling? Or 0 to N-1? Let's use 1/N to N/N
+                is_visited[node] = 1
+        # else: current_node_idx remains None (start of episode)
 
         node_features = torch.cat(
             (normalized_coords, tour_positions.unsqueeze(1), is_visited.unsqueeze(1)),
             dim=1,
         )
 
-        # Compute adjacency matrix as a tensor directly
+        # --- Adjacency Matrix (Optional for GPN's GAT encoder) ---
+        # If your GAT uses dense attention, you might not need this adj matrix
+        # For consistency, let's compute it anyway. GAT can ignore it if needed.
         adjacency_matrix = torch.zeros(
             (num_nodes, num_nodes), device=normalized_coords.device
         )
-        for i in range(len(tour) - 1):
-            from_node = tour[i]
-            to_node = tour[i + 1]
-            adjacency_matrix[from_node, to_node] = 1
-            adjacency_matrix[to_node, from_node] = 1
+        # Optionally build adjacency based on tour edges if needed by a specific GCN variant
+        # for i in range(len(tour) - 1):
+        #     from_node, to_node = tour[i], tour[i+1]
+        #     adjacency_matrix[from_node, to_node] = 1
+        #     adjacency_matrix[to_node, from_node] = 1
+        # Or use a fully connected graph (adjacency_matrix = torch.ones(...))
+        # Or pass None if GAT uses dense attention
 
-        # print("nodeFeatures\n" , node_features.unsqueeze(0))
-        # print("Adjmatrix\n",adjacency_matrix.unsqueeze(0))
+        # Convert current_node_idx to tensor if not None
+        current_node_tensor = (
+            torch.tensor([current_node_idx], device=normalized_coords.device)
+            if current_node_idx is not None
+            else None
+        )
 
-        return node_features.unsqueeze(0), adjacency_matrix.unsqueeze(0)
+        # Return features, adjacency (can be None), and current node index
+        return (
+            node_features.unsqueeze(0),
+            adjacency_matrix.unsqueeze(0),
+            current_node_tensor,
+        )
 
     def train(self, examples):
         # Check if the underlying nnet has the specific parameter methods
@@ -179,29 +197,48 @@ class NNetWrapper(NeuralNet):
                 # Each example is (partial_state, target_pi, leftover_distance)
                 states, target_pis, target_vs = zip(*batch_examples)
 
+                # --- Prepare Batch Inputs (still gets cn_idx for potential use) ---
                 node_features_list = []
                 adjacency_list = []
+                current_node_idx_list = []
                 for st in states:
-                    nf, adj = self.prepare_input(st)
+                    nf, adj, cn_idx = self.prepare_input(st)
                     node_features_list.append(nf)
                     adjacency_list.append(adj)
+                    current_node_idx_list.append(
+                        cn_idx
+                        if cn_idx is not None
+                        else torch.tensor([-1], device=nf.device)
+                    )
 
                 node_features = torch.cat(node_features_list, dim=0)
                 adjacency = torch.cat(adjacency_list, dim=0)
+                current_node_indices = torch.cat(current_node_idx_list, dim=0)
 
                 target_pis = torch.FloatTensor(np.array(target_pis))
                 target_vs = torch.FloatTensor(np.array(target_vs).astype(np.float32))
 
                 if self.args.cuda:
+                    node_features, adjacency, current_node_indices = (
+                        node_features.cuda(),
+                        adjacency.cuda(),
+                        current_node_indices.cuda(),
+                    )
                     target_pis, target_vs = target_pis.cuda(), target_vs.cuda()
 
-                out_pi, out_v = self.nnet(node_features, adjacency)
-                # out_v is leftover distance the network predicts
+                # --- Conditionally call forward based on architecture ---
+                if self.args.get("architecture") == "graphpointer":
+                    out_pi_logits, out_v = self.nnet(
+                        node_features, adjacency, current_node_indices
+                    )  # Pass indices for GPN
+                else:
+                    # For GCN etc., don't pass indices
+                    out_pi_logits, out_v = self.nnet(node_features, adjacency)
+                # --------------------------------------------------------
 
-                l_pi = self.loss_pi(target_pis, out_pi)
-                l_v = self.loss_v(
-                    target_vs, out_v
-                )  # MSE between leftover_distance and predicted leftover
+                # Calculate losses
+                l_pi = self.loss_pi(target_pis, out_pi_logits)
+                l_v = self.loss_v(target_vs, out_v)
                 total_loss = l_pi + l_v
 
                 pi_losses.update(l_pi.item(), node_features.size(0))
@@ -225,14 +262,21 @@ class NNetWrapper(NeuralNet):
     def predict(self, state):
         self.nnet.eval()
         with torch.no_grad():
-            nf, adj = self.prepare_input(state)
-            raw_logits, out_v = self.nnet(nf, adj)
-            # Show actual raw logits before any transformations
-            # logging.info(f"Raw logits: {raw_logits.cpu().numpy()[0]}")
-            # Apply softmax for probability conversion
-            pi = (
-                F.softmax(raw_logits / 2.0, dim=1).cpu().numpy()[0]
-            )  # Explicit temperature
+            # Prepare input (still gets all 3, but we might not use cn_idx)
+            nf, adj, cn_idx = self.prepare_input(state)
+
+            # --- Conditionally call forward based on architecture ---
+            if self.args.get("architecture") == "graphpointer":
+                raw_logits, out_v = self.nnet(nf, adj, cn_idx)  # Pass cn_idx for GPN
+            else:
+                # For GCN and potentially others, don't pass cn_idx
+                raw_logits, out_v = self.nnet(nf, adj)
+            # --------------------------------------------------------
+
+            # Apply softmax to logits for probability conversion
+            temp = self.args.get("predict_temp", 1.0)
+            pi = F.softmax(raw_logits / temp, dim=1).cpu().numpy()[0]
+
             v = out_v.cpu().item()
             return pi, v
 
@@ -251,9 +295,17 @@ class NNetWrapper(NeuralNet):
         self.nnet.load_state_dict(checkpoint)
 
     def loss_pi(self, targets, outputs):
-        # Fix numerical stability by using log_softmax directly
+        # `outputs` are expected to be logits here for GPN
+        # Use CrossEntropyLoss which combines log_softmax and NLLLoss
+        # Targets should be probabilities (already are)
+        # PyTorch CrossEntropyLoss expects class indices as targets, but
+        # for AlphaZero style, we often use KL divergence or simple cross-entropy
+        # with probability targets. Let's stick to the existing method which works
+        # if targets are probabilities and outputs are logits:
         log_probs = F.log_softmax(outputs, dim=1)
-        loss = -torch.sum(targets * log_probs) / targets.size(0)
+        loss = -torch.sum(targets * log_probs) / targets.size(
+            0
+        )  # Negative log likelihood for prob targets
         return loss
 
     def loss_v(self, targets, outputs):

@@ -31,6 +31,7 @@ class MCTS:
         self.Ps = {}
         self.Es = {}
         self.Vs = {}
+        self.state_value_prediction = {}
         self.Pred_cache = {}  # Cache for predictions
 
         # Statistics for monitoring
@@ -149,6 +150,7 @@ class MCTS:
                         if p > 0
                     },
                 )
+            self.state_value_prediction[state_string] = v
             return v
 
         # Internal Node
@@ -160,28 +162,42 @@ class MCTS:
             log.info(
                 f"Evaluating moves for state {state_string} with Ns(s): {self.Ns[state_string]} visits:"
             )
+            log.info(
+                f"State value prediction: {self.state_value_prediction[state_string]}"
+            )
 
         for a in range(self.game.getActionSize()):
             if valids[a]:
                 # Calculate exploration bonus using self.cpuct
-                exploration_bonus = (
-                    self.cpuct
-                    * self.Ps[state_string][a]
-                    * math.sqrt(self.Ns[state_string])
-                )
+                # exploration_bonus = (
+                #     self.cpuct
+                #     * self.Ps[state_string][a]
+                #     * math.sqrt(self.Ns[state_string])
+                # )
+                Nsa = self.Nsa.get((state_string, a), 0)
 
+                discount = (-0.01
+                    * (
+                        self.args.cpuct
+                        * self.Ns[state_string]
+                        ** (1 / (1 + Nsa))
+                    )+ 1)
+                
                 if (state_string, a) in self.Qsa:
                     q_value = self.Qsa[(state_string, a)]
-                    u = q_value - (
-                        exploration_bonus / (1 + self.Nsa[(state_string, a)])
-                    )
+                    # u = q_value - (
+                    #     exploration_bonus / (1 + self.Nsa[(state_string, a)])
+                    # )
                 else:
-                    q_value = 0  # Placeholder cost
-                    u = q_value - (exploration_bonus / (1 + 0))
+                    q_value = self.state_value_prediction[state_string]  # Placeholder cost
+                    # u = q_value - (exploration_bonus / (1 + 0))
+
+                u = q_value * (
+                    discount)
 
                 if self.args.explicit_prints:
                     log.info(
-                        f" Action {a}: Q-value: {q_value:.3f}, Nsa(s,a): {self.Nsa.get((state_string, a), 0)}, Prior P: {self.Ps[state_string][a]:.3f}, discount: {exploration_bonus:.3f}, Selection Score (u): {u:.3f}"
+                        f" Action {a}: Q-value: {q_value:.3f}, Nsa(s,a): {self.Nsa.get((state_string, a), 0)}, Prior P: {self.Ps[state_string][a]:.3f}, Discount: {discount:.3f}, Selection Score (u): {u:.3f}"
                     )
 
                 if u > cur_best:

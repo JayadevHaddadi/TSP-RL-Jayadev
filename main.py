@@ -169,7 +169,7 @@ def main():
             # Basic Configuration
             #####################################
             "configuration name": "standard",
-            "explicit_prints": True,
+            "explicit_prints": False,
             "base_folder": ".",  # "/home/swaminathanj/jayadev_tsp/alpha_tsp/" or "."
             # TSP Instance Settings
             "tsp_instance": "tsplib/burma14.tsp",  # None,  # Set to path like "tsplib/burma14.tsp" or None for random
@@ -268,23 +268,69 @@ def main():
     # Example of using a preset configuration:
     arch_list = [
         (
-            "normal learning_rate 0.01",  # Name of the experiment
+            "normal",  # Name of the experiment
             {
             "architecture": "gcn",  # Options: "gcn", "pointer"
-            "explicit_prints": False,
             "numMCTSSims": 25,
             "numMCTSSimsEval": 25,
             "learning_rate": 0.01, 
             "numEps": 4,
             "cpuct": 1,
-            
-            "load_model": False,  # Set True to load a pre-trained model
-            "load_folder_file": [
-                "for analysis",
-                "best pointer.tar", #best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
-            ],
             },
         ),
+        (
+            "mcts 50",  # Name of the experiment
+            {
+            "architecture": "gcn",  # Options: "gcn", "pointer"
+            "numMCTSSims": 50,
+            "numMCTSSimsEval": 50,
+            "learning_rate": 0.01, 
+            "numEps": 4,
+            "cpuct": 1,
+            },
+        ),
+        (
+            "medium",  # Name of the experiment
+            {
+            **preset_configs["medium"],
+            "architecture": "gcn",  # Options: "gcn", "pointer"
+            "numMCTSSims": 25,
+            "numMCTSSimsEval": 25,
+            "learning_rate": 0.01, 
+            "numEps": 4,
+            "cpuct": 1,
+            },
+        ),
+        (
+            "medium 50 mcts",  # Name of the experiment
+            {
+            **preset_configs["medium"],
+            "architecture": "gcn",  # Options: "gcn", "pointer"
+            "numMCTSSims": 50,
+            "numMCTSSimsEval": 50,
+            "learning_rate": 0.01, 
+            "numEps": 4,
+            "cpuct": 1,
+            },
+        ),
+        # (
+        #     "loading best new algo to use old state value prediction",  # Name of the experiment
+        #     {
+        #     "architecture": "gcn",  # Options: "gcn", "pointer"
+        #     "explicit_prints": False,
+        #     "numMCTSSims": 25,
+        #     "numMCTSSimsEval": 25,
+        #     "learning_rate": 0.01, 
+        #     "numEps": 4,
+        #     "cpuct": 1,
+            
+        #     "load_model": True,  # Set True to load a pre-trained model
+        #     "load_folder_file": [
+        #         "for analysis",
+        #         "best burma14 light fast learning.pth.tar", #best burma14 light.pth.tar,best EIL51 6 procent off sol.tar
+        #     ],
+        #     },
+        # ),
         # (
         #     "normal javadev mcts CPUCT 10",  # Name of the experiment
         #     {

@@ -206,6 +206,9 @@ class MCTS:
 
         # --- Action Selection Loop (Locked Reads) ---
         with self.lock:
+            # Ensure Ns exists for the sqrt calculation
+            sqrt_Ns = math.sqrt(current_Ns) if current_Ns > 0 else 0
+
             # ... (logging) ...
             if current_state_value_pred is None:
                 # Handle potential recovery issue if state_value_prediction is missing
@@ -218,28 +221,43 @@ class MCTS:
 
             for a in range(self.game.getActionSize()):
                 if current_valids[a]:
+                    # Get Q-value and Nsa count safely
                     q_value = self.Qsa.get(
                         (state_string, a), current_state_value_pred
                     )  # Use state value pred if Q(s,a) unknown
                     nsa = self.Nsa.get((state_string, a), 0)
                     prior_p = self.Ps[state_string][a]  # Ps should exist if we are here
 
-                    # --- Your PUCT logic ---
-                    # Using Ns and Nsa read inside the lock
-                    discount = (
-                        -0.01 * (self.args.cpuct * current_Ns ** (1 / (1 + nsa)))
-                        + 1
-                        - prior_p
-                    )  # Use current_Ns
-                    u = q_value * discount
-                    # -----------------------
+                    # --- Select PUCT Formula based on args ---
+                    if self.args.get(
+                        "experimental_puct", False
+                    ):  # Default to standard if arg missing
+                        # Your experimental formula
+                        discount = (
+                            -0.01 * (self.cpuct * current_Ns ** (1 / (1 + nsa)))
+                            + 1
+                            - prior_p
+                        )  # Use current_Ns
+                        u = q_value * discount  # Assumes q_value is negative cost
+                    else:
+                        # Standard PUCT adapted for negative cost maximization
+                        exploration_bonus = self.cpuct * prior_p * (sqrt_Ns / (1 + nsa))
+                        u = (
+                            q_value + exploration_bonus
+                        )  # Maximize: higher (less negative) Q + positive bonus is better
+                    # -----------------------------------------
 
-                    # ... (logging uct value) ...
+                    if self.args.explicit_prints:
+                        log.info(
+                            f" Action {a}: Q: {q_value:.3f}, Nsa: {nsa}, Ns: {current_Ns}, P: {prior_p:.3f}, Score (u): {u:.3f}"
+                            # Optionally add bonus term logging for standard PUCT if desired
+                        )
 
                     if u > cur_best:
                         cur_best = u
                         best_act = a
-                        # ... (logging new best) ...
+                        if self.args.explicit_prints:
+                            log.info(f"  -> New best action!")
         # --- End Action Selection Loop ---
 
         # --- If no valid moves found (shouldn't happen unless terminal?) ---
@@ -265,12 +283,21 @@ class MCTS:
         # --- Update Qsa, Nsa, Ns (Locked Write) ---
         with self.lock:
             if (state_string, a) in self.Qsa:
-                # Your update logic (averaging or taking max)
+                # Update Q value. Averaging is standard, but max aligns with your previous code.
+                # Choose one:
+                # 1. Max: Keep track of the best (least negative) value found via this path
                 self.Qsa[(state_string, a)] = max(self.Qsa[(state_string, a)], v)
-                # self.Qsa[(state_string, a)] = (self.Nsa[(state_string, a)] * self.Qsa[(state_string, a)] + v) / (self.Nsa[(state_string, a)] + 1)
+
+                # 2. Average (More standard Q-update):
+                # current_q = self.Qsa[(state_string, a)]
+                # current_n = self.Nsa[(state_string, a)]
+                # self.Qsa[(state_string, a)] = (current_n * current_q + v) / (current_n + 1)
+
                 self.Nsa[(state_string, a)] += 1
             else:
-                self.Qsa[(state_string, a)] = v
+                self.Qsa[(state_string, a)] = (
+                    v  # First time seeing this action, Q is the returned value
+                )
                 self.Nsa[(state_string, a)] = 1
 
             self.Ns[state_string] = self.Ns.get(state_string, 0) + 1  # Update Ns safely

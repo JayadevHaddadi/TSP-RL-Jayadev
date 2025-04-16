@@ -172,7 +172,7 @@ def main():
             "explicit_prints": False,
             "base_folder": ".",  # "/home/swaminathanj/jayadev_tsp/alpha_tsp/" or "."
             # TSP Instance Settings
-            "tsp_instance": "tsplib/burma14.tsp",  # None,  # Set to path like "tsplib/burma14.tsp" or None for random
+            "tsp_instance": "tsplib/ulysses22.tsp",  # None,  # Set to path like "tsplib/burma14.tsp" or None for random
             "num_nodes": 5,  # Only used if tsp_instance is None
             #####################################
             # Neural Network Architecture
@@ -238,6 +238,7 @@ def main():
             "numMCTSSimsEval": 25,  # Number of MCTS simulations during evaluation
             "maxlenOfQueue": 200000,  # Maximum length of the queue
             "cpuct": 1.0,  # Exploration constant in MCTS
+            "experimental_puct": False,
             "no_improvement_threshold": 3,
             "cpuct_update_factor": 1.05,
             # Training History

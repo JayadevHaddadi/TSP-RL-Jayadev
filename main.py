@@ -178,13 +178,13 @@ def main():
             # Neural Network Architecture
             #####################################
             # Core Architecture
-            "architecture": "gcn",  # Options: "gcn", "pointer", "transformer", "conformer", "graphpointer"
+            "architecture": "conformer",  # Add option: "gcn", ..., "gat", "conformer"
             "num_channels": 128,  # Width of network (64-1024). Larger = more expressive but slower
             "num_layers": 4,  # Number of GCN layers (2-16). Deeper = larger receptive field
             "embedding_dim": 128,  # Initial node embedding size (32-256)
             "hidden_dim": 128,  # Hidden layer width (64-512)
             # Attention & Regularization
-            "heads": 8,  # Number of attention heads (4-16). More heads = finer-grained attention
+            "heads": 4,  # Number of attention heads (4-16). More heads = finer-grained attention
             "dropout": 0.1,  # Dropout rate (0.0-0.5). Higher = more regularization
             "activation": "relu",  # Activation function: 'relu', 'gelu', 'elu'
             # Architecture Components
@@ -260,11 +260,28 @@ def main():
             # "numSelfPlayEpisodes": 4,
             "buffer_size": 200000,  # Replay buffer size
             "checkpoint_interval": 5,  # How often to evaluate and save
+            # Conformer specific args:
+            "ff_expansion_factor": 4,  # FeedForward expansion
+            "conv_expansion_factor": 2,  # Conv module expansion
+            "conv_kernel_size": 31,  # Depthwise conv kernel size
+            "conformer_input_dim": 2,  # Use 2 for coords only, 4 for full features
         }
     )
 
     # Example of using a preset configuration:
     arch_list = [
+        (
+            "conformer_test",  # Name of the experiment
+            {
+                "architecture": "conformer",
+                "embedding_dim": 128,
+                "heads": 4,
+                "num_layers": 4,  # Example Conformer config
+                "conv_kernel_size": 15,  # Smaller kernel maybe
+                "conformer_input_dim": 2,
+                # ... other overrides ...
+            },
+        ),
         (
             "gat_test",  # Name of the experiment
             {
@@ -301,13 +318,6 @@ def main():
             "pointer",  # Renamed from "normal" for clarity
             {
                 "architecture": "pointer",
-                # ... gcn config ...
-            },
-        ),
-        (
-            "conformer",  # Renamed from "normal" for clarity
-            {
-                "architecture": "conformer",
                 # ... gcn config ...
             },
         ),

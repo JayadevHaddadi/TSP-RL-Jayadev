@@ -6,6 +6,7 @@ import TSPGame
 import NNetWrapper
 from tqdm import tqdm
 from utils import complete_tour_with_lin_kernighan, complete_tour_with_nearest_neighbor
+import threading
 
 EPS = 1e-8
 log = logging.getLogger(__name__)
@@ -39,6 +40,9 @@ class MCTS:
         self.total_searches = 0
         self.tree_depth = 0
 
+        # Add Lock
+        self.lock = threading.Lock()
+
     def getActionProb(self, state, temp=1):
         if self.args.explicit_prints:
             log.info("=== Getting action probabilities ===")
@@ -50,10 +54,13 @@ class MCTS:
             self.search(state)
 
         s = self.game.uniqueStringRepresentation(state)
-        counts = [
-            self.Nsa[(s, a)] if (s, a) in self.Nsa else 0
-            for a in range(self.game.getActionSize())
-        ]
+        counts = [0] * self.game.getActionSize()
+
+        # --- Read Nsa (Locked Read) ---
+        with self.lock:
+            for a in range(self.game.getActionSize()):
+                counts[a] = self.Nsa.get((s, a), 0)  # Read counts inside lock
+        # --- End Read ---
 
         if self.args.explicit_prints:
             log.info("Visit counts for each action:")
@@ -93,151 +100,181 @@ class MCTS:
             else self.game.uniqueStringRepresentation(tsp_state)
         )
 
-        if state_string not in self.Es:
-            if self.game.isTerminal(tsp_state):  # Terminal
-                self.Es[state_string] = self.game.getFinalScore(tsp_state)
-                if self.args.explicit_prints:
-                    log.info(f"Game ended with value: {self.Es[state_string]}")
-                return self.Es[state_string]
-            else:
-                self.Es[state_string] = None  # Not terminal
-        if self.Es[state_string] != None:
-            # terminal node
-            if self.args.explicit_prints:
-                log.info(f"Game ended with value: {self.Es[state_string]}")
-            return self.Es[state_string]
+        # --- Check Terminal State (Locked Read/Write) ---
+        with self.lock:
+            terminal_value = self.Es.get(
+                state_string
+            )  # Use .get for safer access initially
 
-        if state_string not in self.Ps:
-            # New leaf node
+        if terminal_value is not None:  # Already known terminal state
+            if self.args.explicit_prints:
+                log.info(f"Game ended with value: {terminal_value}")
+            return terminal_value
+
+        is_terminal = self.game.isTerminal(tsp_state)
+        if is_terminal:
+            final_score = self.game.getFinalScore(tsp_state)
+            with self.lock:
+                self.Es[state_string] = final_score  # Store terminal state value
+            if self.args.explicit_prints:
+                log.info(f"Game ended with value: {final_score}")
+            return final_score
+        # --- End Terminal State Check ---
+
+        # --- Check if Leaf Node (Locked Read) ---
+        with self.lock:
+            policy_exists = state_string in self.Ps
+            # If it exists, read necessary values for internal node path safely
+            if policy_exists:
+                current_valids = self.Vs.get(state_string)  # Use .get for safety
+                current_Ns = self.Ns.get(state_string, 0)  # Default to 0
+                current_state_value_pred = self.state_value_prediction.get(state_string)
+            else:
+                # Check cache inside lock
+                cached_pred = self.Pred_cache.get(state_string)
+
+        # --- Handle New Leaf Node ---
+        if not policy_exists:
             if self.args.explicit_prints:
                 log.info("New state encountered - getting policy from neural network")
-            if state_string in self.Pred_cache:
-                self.Ps[state_string], leftover_v = self.Pred_cache[state_string]
-                self.cache_hits += 1
+            if cached_pred:
+                policy, leftover_v = cached_pred
+                with self.lock:  # Update cache hits under lock
+                    self.cache_hits += 1
             else:
-                self.Ps[state_string], leftover_v = self.nnet.predict(tsp_state)
-                # leftover_v = complete_tour_with_nearest_neighbor(tsp_state)
-                # leftover_v = complete_tour_with_lin_kernighan(tsp_state)
-                # self.Ps[state_string] = np.ones(self.game.getActionSize()) / self.game.getActionSize()
-                self.Pred_cache[state_string] = (self.Ps[state_string], leftover_v)
+                # *** Predict OUTSIDE the lock ***
+                policy, leftover_v = self.nnet.predict(tsp_state)
+                # *** Re-acquire lock to store prediction ***
+                with self.lock:
+                    self.Pred_cache[state_string] = (policy, leftover_v)
 
             total_cost = tsp_state.current_length + leftover_v
             v = -total_cost
+            valids = self.game.getValidMoves(
+                tsp_state
+            )  # getValidMoves should be thread-safe if it only reads game state
 
-            valids = self.game.getValidMoves(tsp_state)
-            self.Ps[state_string] = self.Ps[state_string] * valids
-            sum_Ps_s = np.sum(self.Ps[state_string])
-            if sum_Ps_s > 0:
-                self.Ps[state_string] /= sum_Ps_s
-            else:
-                if self.args.explicit_prints:
-                    log.info(
-                        "All valid moves were masked, defaulting to uniform policy"
+            # --- Update Shared State (Locked Write) ---
+            with self.lock:
+                # Re-check if another thread added it while we were predicting
+                if state_string not in self.Ps:
+                    self.Ps[state_string] = policy * valids  # Apply valids mask
+                    sum_Ps_s = np.sum(self.Ps[state_string])
+                    if sum_Ps_s > 0:
+                        self.Ps[state_string] /= sum_Ps_s
+                    else:
+                        if self.args.explicit_prints:
+                            log.info(
+                                "All valid moves were masked, defaulting to uniform policy"
+                            )
+                        self.Ps[state_string] = self.Ps[state_string] + valids
+                        self.Ps[state_string] /= np.sum(self.Ps[state_string])
+
+                    self.Vs[state_string] = valids
+                    self.Ns[state_string] = 0
+                    self.state_value_prediction[state_string] = v
+                else:
+                    # Another thread beat us, we need to proceed as if it was an internal node
+                    # Read the values set by the other thread
+                    current_valids = self.Vs.get(state_string)
+                    current_Ns = self.Ns.get(state_string, 0)
+                    current_state_value_pred = self.state_value_prediction.get(
+                        state_string
                     )
-                self.Ps[state_string] = self.Ps[state_string] + valids
-                self.Ps[state_string] /= np.sum(self.Ps[state_string])
+                    policy_exists = True  # Update flag
 
-            self.Vs[state_string] = valids
-            self.Ns[state_string] = 0
-            if self.args.explicit_prints:
-                log.info(f"NN Predicted Remaining Cost: {leftover_v:.3f}")
-                log.info(f"Estimated Total Cost (v): {(total_cost):.3f}")
-                log.info(
-                    "Policy probabilities:",
-                    {
-                        i: f"{p:.3f}"
-                        for i, p in enumerate(self.Ps[state_string])
-                        if p > 0
-                    },
-                )
-            self.state_value_prediction[state_string] = v
-            return v
+            # ... (logging with potentially updated v) ...
+            # If we still just created the node, return its value
+            if not policy_exists:  # Check flag again
+                return v
+            # Otherwise fall through to internal node logic below
+        # --- End New Leaf Node ---
 
-        # Internal Node
-        valids = self.Vs[state_string]
+        # --- Internal Node Logic ---
+        # Use values read safely under lock earlier (current_valids, current_Ns, etc.)
+        if current_valids is None:
+            # This indicates a potential logic issue if policy_exists but valids is None
+            log.error(
+                f"Race condition recovery issue or logic error: Policy exists for {state_string} but Vs is missing."
+            )
+            # Handle error appropriately, maybe return a default value or raise exception
+            # For now, let's try to recover by getting valids again (though ideally this shouldn't happen)
+            current_valids = self.game.getValidMoves(tsp_state)
+
         cur_best = -float("inf")
         best_act = -1
 
-        if self.args.explicit_prints:
-            log.info(
-                f"Evaluating moves for state {state_string} with Ns(s): {self.Ns[state_string]} visits:"
+        # --- Action Selection Loop (Locked Reads) ---
+        with self.lock:
+            # ... (logging) ...
+            if current_state_value_pred is None:
+                # Handle potential recovery issue if state_value_prediction is missing
+                log.error(
+                    f"Race condition recovery issue or logic error: state_value_prediction missing for {state_string}"
+                )
+                # Use a default or re-predict (less ideal)
+                _, svp_temp = self.nnet.predict(tsp_state)  # Predict again as fallback
+                current_state_value_pred = -(tsp_state.current_length + svp_temp)
+
+            for a in range(self.game.getActionSize()):
+                if current_valids[a]:
+                    q_value = self.Qsa.get(
+                        (state_string, a), current_state_value_pred
+                    )  # Use state value pred if Q(s,a) unknown
+                    nsa = self.Nsa.get((state_string, a), 0)
+                    prior_p = self.Ps[state_string][a]  # Ps should exist if we are here
+
+                    # --- Your PUCT logic ---
+                    # Using Ns and Nsa read inside the lock
+                    discount = (
+                        -0.01 * (self.args.cpuct * current_Ns ** (1 / (1 + nsa)))
+                        + 1
+                        - prior_p
+                    )  # Use current_Ns
+                    u = q_value * discount
+                    # -----------------------
+
+                    # ... (logging uct value) ...
+
+                    if u > cur_best:
+                        cur_best = u
+                        best_act = a
+                        # ... (logging new best) ...
+        # --- End Action Selection Loop ---
+
+        # --- If no valid moves found (shouldn't happen unless terminal?) ---
+        if best_act == -1:
+            log.warning(
+                f"No valid action found for non-terminal state {state_string}. Valid moves: {current_valids}"
             )
-            log.info(
-                f"State value prediction: {self.state_value_prediction[state_string]}"
+            # Handle this - maybe return 0 or state value prediction?
+            return (
+                current_state_value_pred if current_state_value_pred is not None else 0
             )
-
-        for a in range(self.game.getActionSize()):
-            if valids[a]:
-                # Calculate exploration bonus using self.cpuct
-                # exploration_bonus = (
-                #     self.cpuct
-                #     * self.Ps[state_string][a]
-                #     * math.sqrt(self.Ns[state_string])
-                # )
-                Nsa = self.Nsa.get((state_string, a), 0)
-
-                discount = (-0.01
-                    * (
-                        self.args.cpuct
-                        * self.Ns[state_string]
-                        ** (1 / (1 + Nsa))
-                    )+ 1 - self.Ps[state_string][a])
-                
-                if (state_string, a) in self.Qsa:
-                    q_value = self.Qsa[(state_string, a)]
-                    # u = q_value - (
-                    #     exploration_bonus / (1 + self.Nsa[(state_string, a)])
-                    # )
-                else:
-                    q_value = self.state_value_prediction[state_string]  # Placeholder cost
-                    # u = q_value - (exploration_bonus / (1 + 0))
-
-                u = q_value * (
-                    discount)
-
-                if self.args.explicit_prints:
-                    log.info(
-                        f" Action {a}: Q-value: {q_value:.3f}, Nsa(s,a): {self.Nsa.get((state_string, a), 0)}, Prior P: {self.Ps[state_string][a]:.3f}, Discount: {discount:.3f}, Selection Score (u): {u:.3f}"
-                    )
-
-                if u > cur_best:
-                    cur_best = u
-                    best_act = a
-                    if self.args.explicit_prints:
-                        log.info(f"  -> New best action!")
 
         a = best_act
-        if self.args.explicit_prints:
-            log.info(f"Selected action: {a} with PUCT value: {cur_best:.3f}")
+        # ... (logging selected action) ...
 
-        next_s = self.game.getNextState(tsp_state, a)
+        next_s = self.game.getNextState(
+            tsp_state, a
+        )  # getNextState should be thread-safe
+
+        # *** Recursive call OUTSIDE the lock ***
         v = self.search(next_s)
 
-        if (state_string, a) in self.Qsa:
-            # Average the new value v with the existing Q-value                    log.info("All valid moves were masked, defaulting to uniform policy")
-            self.Qsa[(state_string, a)] = max(self.Qsa[(state_string, a)], v)
+        # --- Update Qsa, Nsa, Ns (Locked Write) ---
+        with self.lock:
+            if (state_string, a) in self.Qsa:
+                # Your update logic (averaging or taking max)
+                self.Qsa[(state_string, a)] = max(self.Qsa[(state_string, a)], v)
+                # self.Qsa[(state_string, a)] = (self.Nsa[(state_string, a)] * self.Qsa[(state_string, a)] + v) / (self.Nsa[(state_string, a)] + 1)
+                self.Nsa[(state_string, a)] += 1
+            else:
+                self.Qsa[(state_string, a)] = v
+                self.Nsa[(state_string, a)] = 1
 
-            # if we find a better value, we update the Q-value
-            # if we find a worse value, we save the avarge
-            # if(self.Qsa[(state_string, a)]<v):
-            #     self.Qsa[(state_string, a)] = v
-            # else:
-            #     self.Qsa[(state_string, a)] = (
-            #         self.Nsa[(state_string, a)] * self.Qsa[(state_string, a)] + v
-            #     ) / (self.Nsa[(state_string, a)] + 1)
-            self.Nsa[(state_string, a)] += 1
-        else:
-            self.Qsa[(state_string, a)] = v
-            self.Nsa[(state_string, a)] = 1
+            self.Ns[state_string] = self.Ns.get(state_string, 0) + 1  # Update Ns safely
+        # --- End Update ---
 
-        self.Ns[state_string] += 1
-        if self.args.explicit_prints:
-            log.info(f"Backpropagating value: {v}")
-            log.info(
-                f"Updated Q-value for (s:{state_string}, a:{a}): {self.Qsa[(state_string, a)]:.3f}"
-            )
-            log.info(
-                f"Updated visit count for (s:{state_string}, a:{a}): {self.Nsa[(state_string, a)]}"
-            )
-            log.info(f"Updated visit count for state: {self.Ns[state_string]}")
+        # ... (logging backpropagating value) ...
         return v

@@ -74,64 +74,69 @@ class NNetWrapper(NeuralNet):
         self.print_model_info()
 
     def prepare_input(self, state):
+        # --- Special handling for Conformer input if needed ---
         if self.args.get("architecture") == "conformer":
-            # For conformer, ignore state-specific info and use raw 2D coordinates
-            nf = self.normalized_coords.unsqueeze(0)  # shape: (1, num_nodes, 2)
-            dummy_adj = torch.zeros(
-                (1, self.board_size, self.board_size),
-                device=self.normalized_coords.device,
-            )
-            return nf, dummy_adj, None  # Return None for current_node_idx
-        num_nodes = self.board_size
-        normalized_coords = self.normalized_coords  # Use precomputed tensor
+            # Option 1: Use only normalized coordinates (dim=2)
+            if self.args.get("conformer_input_dim", 2) == 2:
+                nf = self.normalized_coords.unsqueeze(0)  # [1, N, 2]
+                # --- Create a dummy adjacency tensor instead of None ---
+                dummy_adj = torch.zeros(
+                    (1, self.board_size, self.board_size),  # Shape [1, N, N]
+                    device=nf.device,
+                    dtype=nf.dtype,  # Match dtype
+                )
+                return nf, dummy_adj, None  # Return dummy tensor
+                # ------------------------------------------------------
 
-        tour = state.tour
+            # Option 2: Use the same 4 features as GCN/GAT/GPN
+            # (Code below handles this case if conformer_input_dim is not 2)
+
+        # --- Standard Feature Prep (for GCN/GAT/GPN/Conformer-4Feat) ---
+        num_nodes = self.board_size
+        normalized_coords = self.normalized_coords
         tour_positions = torch.zeros(num_nodes, device=normalized_coords.device)
         is_visited = torch.zeros(num_nodes, device=normalized_coords.device)
-        current_node_idx = None  # Initialize
+        current_node_idx = None
 
-        if tour:  # If tour is not empty
-            current_node_idx = tour[-1]  # Get the last node added
-            for idx, node in enumerate(tour):
-                # Normalize tour position
-                tour_positions[node] = (
-                    idx + 1
-                ) / num_nodes  # Use 1 to N scaling? Or 0 to N-1? Let's use 1/N to N/N
+        if state.tour:  # If tour is not empty
+            current_node_idx = state.tour[-1]  # Get the last node added
+            for idx, node in enumerate(state.tour):
+                tour_positions[node] = (idx + 1) / num_nodes
                 is_visited[node] = 1
-        # else: current_node_idx remains None (start of episode)
+        else:
+            current_node_idx = None
 
         node_features = torch.cat(
             (normalized_coords, tour_positions.unsqueeze(1), is_visited.unsqueeze(1)),
             dim=1,
-        )
+        )  # [N, 4]
 
-        # --- Adjacency Matrix (Optional for GPN's GAT encoder) ---
-        # If your GAT uses dense attention, you might not need this adj matrix
-        # For consistency, let's compute it anyway. GAT can ignore it if needed.
+        # --- Adjacency (potentially ignored by Conformer/GAT) ---
         adjacency_matrix = torch.zeros(
             (num_nodes, num_nodes), device=normalized_coords.device
         )
-        # Optionally build adjacency based on tour edges if needed by a specific GCN variant
-        # for i in range(len(tour) - 1):
-        #     from_node, to_node = tour[i], tour[i+1]
-        #     adjacency_matrix[from_node, to_node] = 1
-        #     adjacency_matrix[to_node, from_node] = 1
-        # Or use a fully connected graph (adjacency_matrix = torch.ones(...))
-        # Or pass None if GAT uses dense attention
+        # ... (optional adjacency building) ...
 
-        # Convert current_node_idx to tensor if not None
         current_node_tensor = (
             torch.tensor([current_node_idx], device=normalized_coords.device)
             if current_node_idx is not None
             else None
         )
 
-        # Return features, adjacency (can be None), and current node index
-        return (
-            node_features.unsqueeze(0),
-            adjacency_matrix.unsqueeze(0),
-            current_node_tensor,
-        )
+        # Select correct features based on potential Conformer input dim mismatch
+        # (This part seems okay, assuming the 4-feature case is handled)
+        if (
+            self.args.get("architecture") == "conformer"
+            and self.args.get("conformer_input_dim", 2) == 2
+        ):
+            # Should have returned the 2-feature nf and dummy_adj above
+            # This fallback might indicate an issue if reached, but let's keep it for now
+            input_features = self.normalized_coords.unsqueeze(0)
+        else:
+            input_features = node_features.unsqueeze(0)  # [1, N, 4]
+
+        # Return features, adjacency, and current node index
+        return input_features, adjacency_matrix.unsqueeze(0), current_node_tensor
 
     def train(self, examples):
         # Check if the underlying nnet has the specific parameter methods
